@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>UAV Payload Dashboard - Group 3</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background-color: #121212;
+      color: #e0e0e0;
+    }
+
+    header {
+      background-color: #1e1e1e;
+      padding: 15px;
+      text-align: center;
+      border-bottom: 1px solid #333;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      color: #f5f5f5;
+    }
+
+    .tabs {
+      display: flex;
+      justify-content: center;
+      background-color: #1e1e1e;
+      padding: 10px;
+      border-bottom: 1px solid #333;
+      flex-wrap: wrap;
+    }
+
+    .tab-button {
+      background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+      color: #eee;
+      padding: 10px 20px;
+      margin: 5px;
+      border: 1px solid #444;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      flex: 1 1 180px;
+      text-align: center;
+    }
+
+    .tab-button:hover {
+      background-color: #2d2d2d;
+      transform: scale(1.05);
+    }
+
+    .tab-content {
+      display: none;
+      padding: 20px;
+    }
+
+    .active {
+      display: block;
+    }
+
+    .main-layout {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      margin: 20px auto;
+      max-width: 95%;
+    }
+
+    .camera-box {
+      flex: 1 1 70%;
+      background-color: #1e1e1e;
+      border: 2px solid #444;
+      border-radius: 10px;
+      padding: 10px;
+      margin: 10px;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+    }
+
+    .camera-box img {
+      width: 100%;
+      height: auto;
+      border-radius: 5px;
+    }
+
+    .status-section {
+      margin-top: 10px;
+      background-color: #222;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #444;
+    }
+
+    .sensor-values {
+      flex: 0 1 250px;
+      background-color: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 15px;
+      margin: 10px;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+    }
+
+    .sensor-values h3 {
+      margin-top: 0;
+      color: #f5f5f5;
+    }
+
+    .sensor-values p {
+      margin: 10px 0;
+    }
+
+    .tab-section-content {
+      max-width: 95%;
+      margin: 0 auto;
+      background-color: #1e1e1e;
+      padding: 20px;
+      border-radius: 10px;
+      border: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+    }
+
+    .chart-box {
+      background-color: #1a1a1a;
+      padding: 15px;
+      border: 1px solid #444;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.5);
+    }
+
+    .status-label {
+      font-weight: bold;
+    }
+
+    .status-off {
+      color: #ff6b6b;
+    }
+
+    .status-on {
+      color: #6bf56b;
+    }
+
+    ul {
+      margin: 10px 0 0 20px;
+    }
+
+    @media (max-width: 768px) {
+      .main-layout {
+        flex-direction: column;
+      }
+
+      .camera-box, .sensor-values {
+        width: 100%;
+      }
+
+      .tab-button {
+        flex: 1 1 45%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>UAV Payload Sensor Dashboard</h1>
+  </header>
+
+  <!-- === TABS MENU === -->
+  <div class="tabs">
+    <button class="tab-button" onclick="showTab('main')">Live Feed</button>
+    <button class="tab-button" onclick="showTab('charts')">Charts</button>
+    <button class="tab-button" onclick="showTab('logs')">Logs</button>
+    <button class="tab-button" onclick="showTab('targets')">Targets</button>
+  </div>
+
+  <!-- === LIVE FEED TAB === -->
+  <div id="main" class="tab-content active">
+    <div class="main-layout">
+      <div class="camera-box">
+        <h3>Drone Camera Feed</h3>
+        <img id="drone-feed" src="/static/latest.jpg" alt="Drone View">
+        <div class="status-section">
+          <p><strong>Coordinates:</strong>
+            X: <span id="coord-x">--</span>,
+            Y: <span id="coord-y">--</span>,
+            Z: <span id="coord-z">--</span>
+          </p>
+          <p><strong>Target Detected:</strong>
+            <span id="target-status" class="status-label status-off">No</span>
+          </p>
+          <p><strong>Drill Status:</strong>
+            <span id="drill-status" class="status-label">Idle</span>
+          </p>
+          <p><strong>Detected Targets:</strong></p>
+          <ul id="target-list">
+            <li>None</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="sensor-values">
+        <h3>Sensor Values</h3>
+        <p><strong>Temp:</strong> <span id="temperature-value">--</span> °C</p>
+        <p><strong>Pressure:</strong> <span id="pressure-value">--</span> hPa</p>
+        <p><strong>Humidity:</strong> <span id="humidity-value">--</span> %</p>
+        <p><strong>Light:</strong> <span id="ambient_light-value">--</span> lux</p>
+        <p><strong>CO₂:</strong> <span id="gas_co2-value">--</span> ppm</p>
+        <p><strong>VOC:</strong> <span id="gas_voc-value">--</span> ppb</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- === CHARTS TAB === -->
+  <div id="charts" class="tab-content">
+    <div class="tab-section-content">
+      <h2>Sensor Charts</h2>
+
+      <div class="chart-box">
+        <h4>Temperature (°C)</h4>
+        <canvas id="temperature-chart" height="100"></canvas>
+      </div>
+
+      <div class="chart-box">
+        <h4>Pressure (hPa)</h4>
+        <canvas id="pressure-chart" height="100"></canvas>
+      </div>
+
+      <div class="chart-box">
+        <h4>Humidity (%)</h4>
+        <canvas id="humidity-chart" height="100"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- === LOGS TAB === -->
+  <div id="logs" class="tab-content">
+    <div class="tab-section-content">
+      <h2>System Logs</h2>
+      <p>[Log entries will go here]</p>
+    </div>
+  </div>
+
+  <!-- === TARGET INFO TAB === -->
+  <div id="targets" class="tab-content">
+    <div class="tab-section-content">
+      <h2>Target Detection Info</h2>
+      <p>[Detailed target detection output will appear here]</p>
+    </div>
+  </div>
+
+  <script>
+    function showTab(id) {
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    const maxDataPoints = 20;
+    const temperatureChart = new Chart(document.getElementById('temperature-chart').getContext('2d'), {
+      type: 'line',
+      data: { labels: [], datasets: [{ label: 'Temp (°C)', data: [], borderColor: 'red', fill: false }] },
+      options: { animation: false, scales: { x: { display: false }, y: { beginAtZero: false } } }
+    });
+
+    const pressureChart = new Chart(document.getElementById('pressure-chart').getContext('2d'), {
+      type: 'line',
+      data: { labels: [], datasets: [{ label: 'Pressure (hPa)', data: [], borderColor: 'deepskyblue', fill: false }] },
+      options: { animation: false, scales: { x: { display: false }, y: { beginAtZero: false } } }
+    });
+
+    const humidityChart = new Chart(document.getElementById('humidity-chart').getContext('2d'), {
+      type: 'line',
+      data: { labels: [], datasets: [{ label: 'Humidity (%)', data: [], borderColor: 'limegreen', fill: false }] },
+      options: { animation: false, scales: { x: { display: false }, y: { beginAtZero: false } } }
+    });
+
+    function updateChart(chart, value) {
+      if (chart.data.labels.length >= maxDataPoints) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+      const label = new Date().toLocaleTimeString();
+      chart.data.labels.push(label);
+      chart.data.datasets[0].data.push(value);
+      chart.update('none');
+    }
+
+    async function fetchSensorData() {
+      try {
+        const res = await fetch('/sensor_data');
+        const data = await res.json();
+
+        document.getElementById('temperature-value').innerText = data.temperature;
+        document.getElementById('pressure-value').innerText = data.pressure;
+        document.getElementById('humidity-value').innerText = data.humidity;
+        document.getElementById('ambient_light-value').innerText = data.ambient_light;
+        document.getElementById('gas_co2-value').innerText = data.gas_co2;
+        document.getElementById('gas_voc-value').innerText = data.gas_voc;
+        document.getElementById('coord-x').innerText = data.coord_x;
+        document.getElementById('coord-y').innerText = data.coord_y;
+        document.getElementById('coord-z').innerText = data.coord_z;
+
+        const targetStatus = document.getElementById('target-status');
+        if (data.target_detected) {
+          targetStatus.innerText = 'Yes';
+          targetStatus.classList.add('status-on');
+          targetStatus.classList.remove('status-off');
+        } else {
+          targetStatus.innerText = 'No';
+          targetStatus.classList.remove('status-on');
+          targetStatus.classList.add('status-off');
+        }
+
+        document.getElementById('drill-status').innerText = data.drill_status;
+
+        const targetList = document.getElementById('target-list');
+        targetList.innerHTML = '';
+        if (data.detected_targets && data.detected_targets.length > 0) {
+          data.detected_targets.forEach(t => {
+            const li = document.createElement('li');
+            li.innerText = t;
+            targetList.appendChild(li);
+          });
+        } else {
+          targetList.innerHTML = '<li>None</li>';
+        }
+
+        updateChart(temperatureChart, data.temperature);
+        updateChart(pressureChart, data.pressure);
+        updateChart(humidityChart, data.humidity);
+      } catch (err) {
+        console.error('Error fetching sensor data:', err);
+      }
+    }
+
+    function refreshImage() {
+      const img = document.getElementById('drone-feed');
+      img.src = `/static/latest.jpg?t=${new Date().getTime()}`;
+    }
+
+    fetchSensorData();
+    setInterval(fetchSensorData, 3000);
+    setInterval(refreshImage, 3000);
+  </script>
+</body>
+</html>
+
+
+
+
