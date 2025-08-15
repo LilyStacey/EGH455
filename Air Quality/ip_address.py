@@ -1,68 +1,46 @@
-import requests
+import socket
+import subprocess
+import ST7735
 
-import logging 
-
-import st7735  
-from fonts.ttf import RobotoMedium as UserFont
-from PIL import Image, ImageDraw, ImageFont
-
-def get_public_ip():
-    """Fetches the public IP address of the machine."""
+def get_local_ip():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # Connect to an external host (doesn't actually send data)
+            s.connect(("8.8.8.8", 80))
+            IP = s.getsockname()[0]
+        except Exception:
+            IP = "N/A"
+        finally:
+            s.close()
+        return IP
+def get_ip_from_cmd():
+    cmd = "ip addr show eth0 | grep inet | awk '{print $2}' | cut -d/ -f1"
     try:
-        response = requests.get("https://api.ipify.org") # or "https://checkip.amazonaws.com"
-        response.raise_for_status()  # Raise an exception for bad status codes
-        return response.text
-    except requests.exceptions.RequestException as e:
-        return f"Error getting public IP: {e}"
-
-public_ip = get_public_ip()
-print(f"Your Public IP Address: {public_ip}")
-
-logging.basicConfig(format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s", 
-        level = logging.INFO,
-        datefmt="%Y-%m-%d %H:%M:%S")
-logging.info(f"Your Public IP Address: {public_ip}")
-
-# Display the public IP address on a small TFT display
-
-disp = st7735.ST7735(
+        output = subprocess.check_output(cmd, shell=True).decode().strip()
+        return output
+    except subprocess.CalledProcessError:
+        return "N/A"
+        
+# Initialize the display (adjust pins and settings as per your setup)
+disp = ST7735.ST7735(
     port=0,
-    cs=1,
-    dc="GPI09", 
-    backlight="GPI012",
-    rotation=270,
-    spi_speed_hz = 10000000
+    cs=ST7735.BG_SPI_CS_FRONT,  # or other CS pin
+    dc=9,  # or other DC pin
+    rst=10, # or other RST pin
+    width=128,
+    height=160, # or 80 for 0.96" display
+    rotation=90, # Adjust for your display orientation
+    spi_speed_hz=4000000
     )
-
-# Initialize the display
 disp.begin()
 
-WIDTH = disp.width
-HEIGHT = disp.height
+# Clear the display
+disp.clear()
+# Get the IP address
+ip_address = get_local_ip() # or get_ip_from_cmd()
 
-# Create a new image with a white background
-image = Image.new("RGB", (WIDTH, HEIGHT), "white")
-draw = ImageDraw.Draw(image)
+# Display the IP address
+disp.draw_text((10, 10), "IP Address:", disp.WHITE)
+disp.draw_text((10, 30), ip_address, disp.WHITE)
 
-# text configuration
-font_size = 25
-font = ImageFont.truetype(UserFont, 20)
-text_color = (255, 225, 225)  
-back_colour = (0, 170, 170)
-
-message = f"Public IP: {public_ip}"
-text_width, text_height = draw.textsize(message, font=font)
-
-# Calculate text position to center it
-text_x = (WIDTH - text_width) // 2
-text_y = (HEIGHT - text_height) // 2    
-
-# Draw the text on the image
-draw.rectangle([0, 0, WIDTH, HEIGHT], fill=back_colour)
-draw.text((text_x, text_y), message, font=font, fill=text_color)       
-
-try: 
-    while True:
-        pass
-except KeyboardInterrupt:
-    logging.info("Exiting on keyboard interrupt.")  
+# You might want to update this periodically in a loop
