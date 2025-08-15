@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
 import logging
-
+import socket 
 import st7735
 from fonts.ttf import RobotoMedium as UserFont
 from PIL import Image, ImageDraw, ImageFont
+
+hostname = socket.gethostname()
+IPAddr = socket.gethostbyname(hostname)
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
@@ -44,7 +47,7 @@ font = ImageFont.truetype(UserFont, font_size)
 text_colour = (255, 255, 255)
 back_colour = (0, 170, 170)
 
-message = "Hello, World!"
+message = "IP:" + IPAddr
 
 x1, y1, x2, y2 = font.getbbox(message)
 size_x = x2 - x1
