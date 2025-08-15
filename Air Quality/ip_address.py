@@ -5,9 +5,14 @@ import socket
 import st7735
 from fonts.ttf import RobotoMedium as UserFont
 from PIL import Image, ImageDraw, ImageFont
+import os 
+import requests 
 
 hostname = socket.gethostname()
-IPAddr = socket.gethostbyname(hostname)
+IPAddr = socket.gethostbyname(hostname) 
+
+response = requests.get("https://api.ipify.org")
+public_ip = response.text.strip()
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
@@ -42,12 +47,12 @@ img = Image.new("RGB", (WIDTH, HEIGHT), color=(0, 0, 0))
 draw = ImageDraw.Draw(img)
 
 # Text settings.
-font_size = 25
+font_size = 15
 font = ImageFont.truetype(UserFont, font_size)
 text_colour = (255, 255, 255)
-back_colour = (0, 170, 170)
+back_colour = (255, 0, 0)
 
-message = "IP:" + IPAddr
+message = "IP: " + public_ip
 
 x1, y1, x2, y2 = font.getbbox(message)
 size_x = x2 - x1
