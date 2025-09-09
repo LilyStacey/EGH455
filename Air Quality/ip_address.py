@@ -1,4 +1,7 @@
-#!/usr/bin/env python3
+## ip_address.py 
+# This script displays the local and public IP address on a 0.96" LCD using the ST7735 driver.
+# Author: Lily Stacey 
+# Date: 2025-08-22
 
 import logging
 import socket 
@@ -7,6 +10,7 @@ from fonts.ttf import RobotoMedium as UserFont
 from PIL import Image, ImageDraw, ImageFont
 import os 
 import requests 
+
 
 hostname = socket.gethostname()
 IPAddr = socket.gethostbyname(hostname) 
@@ -19,10 +23,9 @@ logging.basicConfig(
     level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S")
 
-logging.info("""lcd.py - Hello, World! example on the 0.96" LCD.
-
+logging.info(""" ip_address.py
+This script displays the local and public IP address on a 0.96" LCD using the ST7735 driver.
 Press Ctrl+C to exit!
-
 """)
 
 # Create LCD class instance.
