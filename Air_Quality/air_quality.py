@@ -18,7 +18,7 @@ bme280 = BME280(i2c_dev=bus)
 
 
 def get_cpu_temperature(): 
-    with open("sys/class/thermal/thermal_zone0/temp", "r") as f: 
+    with open("/sys/class/thermal/thermal_zone0/temp", "r") as f: 
         temp = f.read()
         temp = int(temp) / 1000
     return temp
