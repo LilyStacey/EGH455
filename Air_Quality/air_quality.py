@@ -5,10 +5,14 @@
 
 import logging 
 import time 
+import st7735 
 
+from PIL import Image, ImageDraw, ImageFont
+from fonts.ttf import RobotoBold as UserFont
 from bme280 import BME280
 from smbus2 import SMBus
 from enviroplus import gas 
+
 
 try:
     from ltr559 import LTR559
@@ -26,8 +30,35 @@ logging.info(""" air_quality.py - Read Data from Enviro+ Sensors
              
              Press ctrl+c to exit""") 
 
+# LCD Config
+disp = st7735.ST7735( 
+    port = 0, 
+    cs = 1, 
+    dc = "GPIO9", 
+    backlight = "GPIO12", 
+    rotation = 270, 
+    spi_speed_hz = 10000000
+)
+
+disp.begin()
+img = Image.new('RGB', (disp.width, disp.height), color = (0, 0, 0))
+draw = Image.Draw(img)
+rect_colour = (0, 180, 180)
+draw.rectangle((0, 0, 160, 80), rect_colour)
+
 bus = SMBus(1)
 bme280 = BME280(i2c_dev=bus)
+
+font_size = 18 
+font = ImageFont.truetype(UserFont, font_size)
+
+colour = (225, 225, 225)
+temperature = "Temp: {:.2f} *C".format(bme280.get_temperature())
+
+x = 0 
+y = 0 
+draw.text((x, y), temperature, font = font, fill = colour)
+disp.display(img)
 
 gas.enable_adc()
 gas.set_adc_gain(4.096)
