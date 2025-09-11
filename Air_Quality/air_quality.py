@@ -36,6 +36,7 @@ while True:
     readings = gas.read_all()
     logging.info(readings)
     pressure = bme280.get_pressure()
+    humidity = bme280.get_humidity()
     logging.info(f""" Pressure: {pressure:05.2f} hPa 
         Relative Humidity: {humidity:05.2f} % """)
     time.sleep(1.0)
