@@ -42,7 +42,7 @@ disp = st7735.ST7735(
 
 disp.begin()
 img = Image.new('RGB', (disp.width, disp.height), color = (0, 0, 0))
-draw = Image.Draw(img)
+draw = ImageDraw.Draw(img)
 rect_colour = (0, 180, 180)
 draw.rectangle((0, 0, 160, 80), rect_colour)
 
