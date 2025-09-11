@@ -38,13 +38,14 @@ while True:
     avg_cpu_temp = sum(cpu_temps) / float(len(cpu_temps))
     raw_temp = bme280.get_temperature()
     comp_temp = raw_temp - ((avg_cpu_temp - raw_temp) / factor)
-    logging.info(f"Compensated temperature: {comp_temp:05.2f} °C")
     readings = gas.read_all()
     logging.info(readings)
     pressure = bme280.get_pressure()
     humidity = bme280.get_humidity()
-    logging.info(f""" Pressure: {pressure:05.2f} hPa 
-        Relative Humidity: {humidity:05.2f} % """)
     lux = ltr559.get_lux()
-    logging.info(f""" Light: {lux:05.02f} Lux """)
+    logging.info(f"""Compenstated Temperature: {comp_temp:05.2f} °C
+                 Pressure: {pressure:05.2f} hPa
+                 Relative Humidity: {humidity:05.2f} %
+                Light: {lux:05.02f} Lux """)
+    logging.info(readings)
     time.sleep(1.0)
