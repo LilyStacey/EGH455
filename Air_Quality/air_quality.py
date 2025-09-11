@@ -4,6 +4,7 @@ import time
 
 from bme280 import BME280
 from smbus2 import SMBus
+from enviroplus import gas 
 
 
 logging.basicConfig(
@@ -14,8 +15,6 @@ logging.basicConfig(
 
 bus = SMBus(1)
 bme280 = BME280(i2c_dev=bus)
-
-
 
 def get_cpu_temperature(): 
     with open("/sys/class/thermal/thermal_zone0/temp", "r") as f: 
@@ -34,4 +33,6 @@ while True:
     raw_temp = bme280.get_temperature()
     comp_temp = raw_temp - ((avg_cpu_temp - raw_temp) / factor)
     logging.info(f"Compensated temperature: {comp_temp:05.2f} °C")
+    readings = gas.read_all()
+    logging.info(readings)
     time.sleep(1.0)
