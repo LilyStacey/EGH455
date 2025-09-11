@@ -1,3 +1,7 @@
+# air_quality.py 
+# reads sensor data from enviro+ board 
+# Author: Lily Stacey
+# Last Update: 12/09/2025
 
 import logging 
 import time 
@@ -12,16 +16,23 @@ try:
 except ImportError: 
     import ltr559
 
-
+# Logging Config
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
     level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S")
 
+logging.info(""" air_quality.py - Read Data from Enviro+ Sensors 
+             
+             Press ctrl+c to exit""") 
 
 bus = SMBus(1)
 bme280 = BME280(i2c_dev=bus)
 
+gas.enable_adc()
+gas.set_adc_gain(4.096)
+
+# get_cpu_temperature: gets cpu temp for temperature compensation 
 def get_cpu_temperature(): 
     with open("/sys/class/thermal/thermal_zone0/temp", "r") as f: 
         temp = f.read()
