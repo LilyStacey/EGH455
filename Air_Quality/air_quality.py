@@ -6,6 +6,12 @@ from bme280 import BME280
 from smbus2 import SMBus
 from enviroplus import gas 
 
+try:
+    from ltr559 import LTR559
+    ltr559 = LTR559()
+except ImportError: 
+    import ltr559
+
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
@@ -39,4 +45,6 @@ while True:
     humidity = bme280.get_humidity()
     logging.info(f""" Pressure: {pressure:05.2f} hPa 
         Relative Humidity: {humidity:05.2f} % """)
+    lux = ltr559.get_lux()
+    logging.info(f""" Light: {lux:05.02f} Lux """)
     time.sleep(1.0)
