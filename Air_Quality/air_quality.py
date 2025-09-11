@@ -35,4 +35,7 @@ while True:
     logging.info(f"Compensated temperature: {comp_temp:05.2f} °C")
     readings = gas.read_all()
     logging.info(readings)
+    pressure = bme280.get_pressure()
+    logging.info(f""" Pressure: {pressure:05.2f} hPa 
+        Relative Humidity: {humidity:05.2f} % """)
     time.sleep(1.0)
