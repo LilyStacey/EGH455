@@ -27,7 +27,7 @@ factor = 2.25
 
 cpu_temps = [get_cpu_temperature()] * 5 
 
-while true: 
+while True: 
     cpu_temp = get_cpu_temperature()
     cpu_temps = cpu_temps[1:] + [cpu_temp]
     avg_cpu_temp = sum(cpu_temps) / float(len(cpu_temps))
