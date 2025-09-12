@@ -3,6 +3,7 @@
 # Author: Lily Stacey
 # Last Update: 12/09/2025
 
+import paramiko
 import logging 
 import time 
 import st7735 
@@ -63,6 +64,7 @@ disp.display(img)
 gas.enable_adc()
 gas.set_adc_gain(4.096)
 
+
 # get_cpu_temperature: gets cpu temp for temperature compensation 
 def get_cpu_temperature(): 
     with open("/sys/class/thermal/thermal_zone0/temp", "r") as f: 
@@ -70,24 +72,27 @@ def get_cpu_temperature():
         temp = int(temp) / 1000
     return temp
 
-factor = 2.25
-
-cpu_temps = [get_cpu_temperature()] * 5 
-
-while True: 
+def compensate_temperature(): 
+    factor = 2.25
+    cpu_temps = [get_cpu_temperature()] * 5
     cpu_temp = get_cpu_temperature()
     cpu_temps = cpu_temps[1:] + [cpu_temp]
     avg_cpu_temp = sum(cpu_temps) / float(len(cpu_temps))
     raw_temp = bme280.get_temperature()
     comp_temp = raw_temp - ((avg_cpu_temp - raw_temp) / factor)
-    readings = gas.read_all()
-    logging.info(readings)
+    return comp_temp
+
+def get_sensor_data(): 
+    temperature = compensate_temperature() 
+    gas_readings = gas.read_all()
     pressure = bme280.get_pressure()
-    humidity = bme280.get_humidity()
+    humidity = bme280.get_humidity
     lux = ltr559.get_lux()
+    return temperature, gas_readings, pressure, humidity, lux
+
+while True: 
     logging.info(f"""Compenstated Temperature: {comp_temp:05.2f} °C
-                 Pressure: {pressure:05.2f} hPa
-                 Relative Humidity: {humidity:05.2f} %
+                Pressure: {pressure:05.2f} hPa
+                Relative Humidity: {humidity:05.2f} %
                 Light: {lux:05.02f} Lux """)
-    logging.info(readings)
     time.sleep(1.0)
