@@ -48,26 +48,30 @@ async def periodic(name: str, interval: float, step: Callable[[], Awaitable[None
 # ===================== Shutdown handling ===================== #
 
 class App:
-    def __init__(self) -> None:
-        self._tasks: list[asyncio.Task[None]] = []
-        self._stopping = asyncio.Event()
+    def __init__(self, stop_event: asyncio.Event) -> None:
+        self.tasks: list[asyncio.Task[None]] = []
+        self.stopping = asyncio.Event()
+        self.stop_event = stop_event
+        self.cam: CameraTask | None = None
 
     async def start(self) -> None:
-        cam = CameraTask()
-
         # Example of register the air quality taks 
-        self._tasks.append(asyncio.create_task(periodic("camera capturing", 1.0, cam.step)))
+        self.cam = CameraTask(stop_event=self.stop_event)
+        self.tasks.append(asyncio.create_task(periodic("camera capturing", 0.2, self.cam.step)))
         logging.info("tasks started")
 
     async def stop(self) -> None:
-        if self._stopping.is_set():
+        if self.stopping.is_set():
             return
-        self._stopping.set()
+        self.stopping.set()
         logging.info("stopping…")
-        for t in self._tasks:
+        for t in self.tasks: 
+            t.shutdown()
             t.cancel()
         # Gather with return_exceptions to ensure all are awaited
-        await asyncio.gather(*self._tasks, return_exceptions=True)
+        await asyncio.gather(*self.tasks, return_exceptions=True)
+        
+             
         logging.info("all tasks stopped")
 
 # ===================== Main ===================== #
@@ -76,18 +80,17 @@ async def amain() -> None:
     setup_logging()
     logging.info("app starting…")
 
-    app = App()
+    stop_called = asyncio.Event()
+
+    app = App(stop_event=stop_called)
     await app.start()
 
     loop = asyncio.get_running_loop()
 
-    # Signals -> graceful cancellation
-    stop_called = asyncio.Event()
-
     def _signal_handler(signum, frame=None):
         logging.info(f"signal {signum} received")
         stop_called.set()
-
+    #Signal handeling for Linx and Windows
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
             loop.add_signal_handler(sig, _signal_handler, sig)

@@ -1,10 +1,14 @@
 from ultralytics import YOLO
 import cv2
+import asyncio  
 
 
 class CameraTask:
-    def __init__(self):
+    def __init__(self,stop_event: asyncio.Event | None = None):
         self._inited = False
+        print("Starting webcam detection... Press 'q' to quit.")
+        self.stop_event = stop_event or asyncio.Event()
+        self.cap = None
 
     def _init_hw(self):
 
@@ -16,19 +20,33 @@ class CameraTask:
 
         if not self.cap.isOpened():
             print("Cannot open camera")
-            exit()
+            self.stop_event.set()                       
+            return
+        
 
-        print("Starting webcam detection... Press 'q' to quit.")
+    def shutdown(self):                                   # NEW: release resources here
+        if self.cap:
+            self.cap.release()
+        cv2.destroyAllWindows()
+
+        
         # Processing video frames in a loop
+
     def step(self):
+        if self.stop_event.is_set():                      # NEW: quick exit if stopping
+            return
                 
         if not self._inited:
             self._init_hw()
+            self._inited = True
+            if self.stop_event.is_set():                 # if init failed
+                return
         
         success, frame =  self.cap.read()
         if not success:
             print("⚠️ Failed to grab frame")
-            exit()
+            self.stop_event.set()                         
+            return
 
         # Run inference on the frame (as a numpy array)
         self.results = self.model(frame, verbose=False)
@@ -55,14 +73,14 @@ class CameraTask:
                     class_names.append(self.result.names[int(cls_id)])
 
         if class_names:
-            print(f"✅ Detected objects: {', '.join(set(class_names))}")
+            print(f"Detected objects: {', '.join(set(class_names))}")
         else:
             print("⚠️ No objects detected.")
 
         # Break on 'q' key press
         if cv2.waitKey(1) & 0xFF == ord('q'):
-            exit()
+            self.stop_event.set()                         # NEW
+            return
 
         # Release resources
-        self.cap.release()
-        cv2.destroyAllWindows()
+        
