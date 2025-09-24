@@ -56,7 +56,7 @@ class App:
         cam = CameraTask()
 
         # Example of register the air quality taks 
-        self._tasks.append(asyncio.create_task(periodic("air-quality", 1.0, cam.step)))
+        self._tasks.append(asyncio.create_task(periodic("camera capturing", 1.0, cam.step)))
         logging.info("tasks started")
 
     async def stop(self) -> None:
