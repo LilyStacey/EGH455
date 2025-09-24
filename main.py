@@ -53,12 +53,38 @@ class App:
         self.stopping = asyncio.Event()
         self.stop_event = stop_event
         self.cam: CameraTask | None = None
+        self._results_q: asyncio.Queue = asyncio.Queue(maxsize=2)
 
     async def start(self) -> None:
         # Example of register the air quality taks 
-        self.cam = CameraTask(stop_event=self.stop_event)
+        loop = asyncio.get_running_loop()
+        self.cam = CameraTask(
+            loop=loop,
+            stop_event=self.stop_event,
+            results_q=self._results_q,
+        )
         self.tasks.append(asyncio.create_task(periodic("camera capturing", 0.2, self.cam.step)))
         logging.info("tasks started")
+
+    #Task temple for a consumer of Camtasks
+    # async def detection_consumer():
+    #         while not self._stop_event.is_set():
+    #             try:
+    #                 # timeout so we can check stop_event periodically
+    #                 payload = await asyncio.wait_for(self._results_q.get(), timeout=0.5)
+    #             except asyncio.TimeoutError:
+    #                 continue
+    #             try:
+    #                 # === Use camera info here ===
+    #                 # e.g., log or route to another subsystem
+    #                 if payload["names"]:
+    #                     logging.info(f"Detected: {payload['names']} (count={payload['count']})")
+    #             finally:
+    #                 self._results_q.task_done()
+
+    #     self._tasks.append(asyncio.create_task(detection_consumer()))
+
+    #     logging.info("tasks started")
 
     async def stop(self) -> None:
         if self.stopping.is_set():
