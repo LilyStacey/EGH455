@@ -5,6 +5,7 @@ import threading
 from typing import Any, Dict, Optional
 
 class CameraTask:
+
     def __init__(self,loop: asyncio.AbstractEventLoop, stop_event: asyncio.Event, results_q: Optional[asyncio.Queue] | None = None):
         
         self.loop = loop                         # event loop to post back into
@@ -28,7 +29,6 @@ class CameraTask:
             self.stop_flag.set()
             return
         
-
     def shutdown(self): 
         self.stop_flag.set()                                  # NEW: release resources here
         if self.cap:
@@ -36,6 +36,7 @@ class CameraTask:
         cv2.destroyAllWindows()
 
         #Make data avilable to other threads
+    
     def _publish(self, payload: Dict[str, Any]) -> None:
         """Called on the event loop thread via call_soon_threadsafe."""
         if not self.results_q:
@@ -45,15 +46,37 @@ class CameraTask:
         except asyncio.QueueFull:
             # drop oldest / newest as desired; simplest: drop this one
             pass
+    
+    def handle_gauge():
+        print("gauge")
+
+    def handle_valve_open():
+        print("valve_open")
+
+    def handle_valve_closed():
+        print("valve_closed")
+
+    def handle_marker():
+        print("marker")
+            
+
+    object_actions = {
+    "gauge": handle_gauge,
+    "gauge_tip": handle_gauge,
+    "gauge_middle": handle_gauge,
+    "valve_open": handle_valve_open,
+    "valve_closed": handle_valve_closed,
+    "marker": handle_marker,
+    }
 
     def step(self):
-        if self.stop_event.is_set():                      # NEW: quick exit if stopping
+        if self.stop_event.is_set():                   
             return
                 
         if not self._inited:
             self._init_hw()
             self._inited = True
-            if self.stop_event.is_set():                 # if init failed
+            if self.stop_event.is_set():           
                 return
         
         success, frame =  self.cap.read()
@@ -89,14 +112,17 @@ class CameraTask:
 
         if class_names:
             print(f"Detected objects: {', '.join(set(class_names))}")
+            detected_set = set(class_names)
+
+            for name in detected_set:
+                action = object_actions.get(name.lower())  # lowercase just in case
+                if action:
+                    action()
+                else:
+                    print(f"No handler defined for: {name}")
+                
         else:
             print("⚠️ No objects detected.")
-
-        if self.result.boxes:
-            for cls_id, conf in zip(self.result.boxes.cls, self.result.boxes.conf):
-                if conf > 0.90:
-                    detected_class_ids.append(int(cls_id))
-                    class_names.append(self.result.names[int(cls_id)])
 
         payload = {
             "classes": detected_class_ids,
