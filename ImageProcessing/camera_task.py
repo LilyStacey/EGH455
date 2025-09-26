@@ -45,6 +45,28 @@ class CameraTask:
             # drop oldest / newest as desired; simplest: drop this one
             pass
 
+    def handle_gauge():
+        print("gauge")
+
+    def handle_valve_open():
+        print("valve_open")
+
+    def handle_valve_closed():
+        print("valve_closed")
+
+    def handle_marker():
+        print("marker")
+
+
+    object_actions = {
+    "gauge": handle_gauge,
+    "gauge_tip": handle_gauge,
+    "gauge_middle": handle_gauge,
+    "valve_open": handle_valve_open,
+    "valve_closed": handle_valve_closed,
+    "marker": handle_marker,
+    }
+
     def step(self):
         if self.stop_event.is_set():                        # NEW: quick exit if stopping
             return
@@ -88,14 +110,17 @@ class CameraTask:
 
         if class_names:
             print(f"Detected objects: {', '.join(set(class_names))}")
+            detected_set = set(class_names)
+
+            for name in detected_set:
+                action = object_actions.get(name.lower())  # lowercase just in case
+                if action:
+                    action()
+                else:
+                    print(f"No handler defined for: {name}")
+
         else:
             print("⚠️ No objects detected.")
-
-        if self.result.boxes:
-            for cls_id, conf in zip(self.result.boxes.cls, self.result.boxes.conf):
-                if conf > 0.90:
-                    detected_class_ids.append(int(cls_id))
-                    class_names.append(self.result.names[int(cls_id)])
 
         payload = {
             "classes": detected_class_ids,
