@@ -1,12 +1,14 @@
 # air_quality.py 
 # reads sensor data from enviro+ board 
 # Author: Lily Stacey
-# Last Update: 12/09/2025
+# Last Update: 18/09/2025
 
-import paramiko
 import logging 
 import time 
 import st7735 
+import math 
+import paramiko
+import json
 
 from PIL import Image, ImageDraw, ImageFont
 from fonts.ttf import RobotoBold as UserFont
@@ -14,12 +16,16 @@ from bme280 import BME280
 from smbus2 import SMBus
 from enviroplus import gas 
 
-
 try:
     from ltr559 import LTR559
     ltr559 = LTR559()
 except ImportError: 
     import ltr559
+
+# Sensing Resistance Values for Gas conversion
+R0_OXIDISING = 200000  
+R0_REDUCING = 150000 
+R0_NH3 = 570000    
 
 # Logging Config
 logging.basicConfig(
@@ -27,51 +33,56 @@ logging.basicConfig(
     level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S")
 
-logging.info(""" air_quality.py - Read Data from Enviro+ Sensors 
-             
+logging.info(""" air_quality.py - Read Data from Enviro+ Sensors  
              Press ctrl+c to exit""") 
 
-# LCD Config
+# Init LCD 
 disp = st7735.ST7735( 
     port = 0, 
     cs = 1, 
-    dc = "GPIO9", 
-    backlight = "GPIO12", 
+    dc = "GPIO9",
+    backlight = "GPIO12",
     rotation = 270, 
     spi_speed_hz = 10000000
 )
 
 disp.begin()
-img = Image.new('RGB', (disp.width, disp.height), color = (0, 0, 0))
-draw = ImageDraw.Draw(img)
-rect_colour = (0, 180, 180)
-draw.rectangle((0, 0, 160, 80), rect_colour)
 
-bus = SMBus(1)
-bme280 = BME280(i2c_dev=bus)
+# write_temp_to_lcd: writes temperature measurements to LCD 
+# input: temperature: the current temperature sensor reading 
+# return: none 
+def write_temp_to_lcd(temperature): 
+    img = Image.new('RGB', (disp.width, disp.height), color = (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    rect_colour = (0, 180, 180)
+    draw.rectangle((0, 0, 160, 80), rect_colour)
 
-font_size = 18 
-font = ImageFont.truetype(UserFont, font_size)
+    bus = SMBus(1)
+    bme280 = BME280(i2c_dev=bus)
 
-colour = (225, 225, 225)
-temperature = "Temp: {:.2f} *C".format(bme280.get_temperature())
+    font_size = 18 
+    font = ImageFont.truetype(UserFont, font_size)
 
-x = 0 
-y = 0 
-draw.text((x, y), temperature, font = font, fill = colour)
-disp.display(img)
+    colour = (225, 225, 225)
+    disp_temperature = "Temp: {:.2f} *C".format(temperature())
 
-gas.enable_adc()
-gas.set_adc_gain(4.096)
-
+    x = 0 
+    y = 0 
+    draw.text((x, y), temperature, font = font, fill = colour)
+    disp.display(img)
 
 # get_cpu_temperature: gets cpu temp for temperature compensation 
+# Input: none 
+# Output: CPU Temperature 
 def get_cpu_temperature(): 
     with open("/sys/class/thermal/thermal_zone0/temp", "r") as f: 
         temp = f.read()
         temp = int(temp) / 1000
     return temp
 
+# get_compensate_temperature: temperature compensation 
+# Input: none 
+# Output: compensated temperature 
 def compensate_temperature(): 
     factor = 2.25
     cpu_temps = [get_cpu_temperature()] * 5
@@ -82,17 +93,94 @@ def compensate_temperature():
     comp_temp = raw_temp - ((avg_cpu_temp - raw_temp) / factor)
     return comp_temp
 
+# get_sensor_data: reads data from all enviro+ sensors 
+# input: none
+# output: a dict containing sensor readings linked with the measurement type 
 def get_sensor_data(): 
     temperature = compensate_temperature() 
     gas_readings = gas.read_all()
     pressure = bme280.get_pressure()
     humidity = bme280.get_humidity
     lux = ltr559.get_lux()
-    return temperature, gas_readings, pressure, humidity, lux
 
-while True: 
-    logging.info(f"""Compenstated Temperature: {comp_temp:05.2f} °C
-                Pressure: {pressure:05.2f} hPa
-                Relative Humidity: {humidity:05.2f} %
-                Light: {lux:05.02f} Lux """)
-    time.sleep(1.0)
+    try: 
+        raw_oxidising = gas_readings.reducing()
+        raw_reducing = gas_readings.reducing()
+        raw_nh3 = gas_readings.nh3()
+
+        ratio_oxidising = raw_oxidising / R0_OXIDISING
+        ratio_reducing = raw_reducing / R0_REDUCING
+        ratio_nh3 = raw_nh3 / R0_NH3
+
+        if ratio_oxidising > 0: 
+            ppm_oxidising = math.pow(10, math.log10(ratio_oxidising) - 0.8129)
+        else:
+            ppm_oxidising = 0
+
+        if ratio_reducing > 0: 
+            ppm_reducing = math.pow(10, (-1.25 * math.log10(ratio_reducing)) + 0.64)
+        else:
+            ppm_reducing = 0
+
+        if ratio_nh3 > 0: 
+            ppm_nh3 = math.pow(10, (-1.8 * math.log10(ration_nh3)) - 0.163)
+        else: 
+            ppm_nh3 = 0
+
+        data = { "Temperature": temperature, 
+            "Reducing Gas": ppm_reducing, 
+            "Oxidizing Gas": ppm_oxidising, 
+            "Nh3": ppm_nh3, 
+            "Pressure": pressure, 
+            "Humidity": humidity, 
+            "Light": lux
+    }
+    except (TypeError, ValueError):         
+        data = { "Temperature": temperature, 
+            "Reducing Gas": gas_readings.reducing(), 
+            "Oxidizing Gas": gas_readings.oxidising(), 
+            "Nh3": gas_readings.nh3(), 
+            "Pressure": pressure, 
+            "Humidity": humidity, 
+            "Light": lux
+    }
+    return data
+
+# currently a test function for sending data 
+def send_data(data): 
+    if data is None: 
+        return False 
+    
+    try: 
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        client.connect(hostname = SSH_HOST, username = SSH_USER, key_filename = SSH_KEY_PATH) 
+
+        sftp = client.open_sftp()
+        
+        json_data = json.dumps(data)
+        with sftp.open(REMOTE_FILE_PATH, 'w') as f: 
+            f.write(json_data)
+        sftp.close()
+        client.close()
+        return True
+
+    except paramiko.AuthenticationException:
+        print("Authentication failed. Please check your SSH key and username.")
+        return False
+    except paramiko.SSHException as ssh_err:
+        print(f"SSH error occurred: {ssh_err}")
+        return False
+    except Exception as e:
+        print(f"Failed to send data over SSH: {e}")
+        return False
+
+# Main Loop
+try: 
+    while True:
+        data = get_sensor_data()
+        # Send Data Here <To Do>
+        write_temp_to_lcd(data["temperature"])
+except KeyboardInterrupt:
+    disp.set_backlight(0)
