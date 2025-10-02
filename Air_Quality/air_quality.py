@@ -4,6 +4,7 @@
 # Last Update: 18/09/2025
 
 import logging 
+import asyncio
 import time 
 import st7735 
 import math 
@@ -47,6 +48,13 @@ disp = st7735.ST7735(
 )
 
 disp.begin()
+
+# SSH configuration 
+SSH_HOST = "your.ssh.server"
+SSH_USER = "your_ssh_username"
+SSH_KEY_PATH = "/path/to/your/private/key"
+REMOTE_FILE_PATH = "/remote/path/data.json"
+
 
 # write_temp_to_lcd: writes temperature measurements to LCD 
 # input: temperature: the current temperature sensor reading 
@@ -175,12 +183,16 @@ def send_data(data):
     except Exception as e:
         print(f"Failed to send data over SSH: {e}")
         return False
+    
+async def async_main_loop():
+    try:
+        while True:
+            data = await asyncio.to_thread(get_sensor_data)
+            await asyncio.to_thread(write_temp_to_lcd, data["Temperature"])
+            await asyncio.to_thread(send_data, data)
+            await asyncio.sleep(2)
+    except KeyboardInterrupt:
+        disp.set_backlight(0)
 
-# Main Loop
-try: 
-    while True:
-        data = get_sensor_data()
-        # Send Data Here <To Do>
-        write_temp_to_lcd(data["temperature"])
-except KeyboardInterrupt:
-    disp.set_backlight(0)
+if __name__ == "__main__": 
+    asyncio.run(async_main_loop)
