@@ -1,15 +1,14 @@
 # air_quality.py 
 # reads sensor data from enviro+ board 
 # Author: Lily Stacey
-# Last Update: 18/09/2025
+# Last Update: 03/10/2025
 
-import logging 
 import asyncio
-import time 
-import st7735 
-import math 
+import logging 
+import math
 import paramiko
 import json
+import time
 
 from PIL import Image, ImageDraw, ImageFont
 from fonts.ttf import RobotoBold as UserFont
@@ -37,162 +36,140 @@ logging.basicConfig(
 logging.info(""" air_quality.py - Read Data from Enviro+ Sensors  
              Press ctrl+c to exit""") 
 
-# Init LCD 
-disp = st7735.ST7735( 
-    port = 0, 
-    cs = 1, 
-    dc = "GPIO9",
-    backlight = "GPIO12",
-    rotation = 270, 
-    spi_speed_hz = 10000000
-)
-
-disp.begin()
-
-# SSH configuration 
-SSH_HOST = "your.ssh.server"
-SSH_USER = "your_ssh_username"
-SSH_KEY_PATH = "/path/to/your/private/key"
-REMOTE_FILE_PATH = "/remote/path/data.json"
-
-
-# write_temp_to_lcd: writes temperature measurements to LCD 
-# input: temperature: the current temperature sensor reading 
-# return: none 
-def write_temp_to_lcd(temperature): 
-    img = Image.new('RGB', (disp.width, disp.height), color = (0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    rect_colour = (0, 180, 180)
-    draw.rectangle((0, 0, 160, 80), rect_colour)
-
-    bus = SMBus(1)
-    bme280 = BME280(i2c_dev=bus)
-
-    font_size = 18 
-    font = ImageFont.truetype(UserFont, font_size)
-
-    colour = (225, 225, 225)
-    disp_temperature = "Temp: {:.2f} *C".format(temperature())
-
-    x = 0 
-    y = 0 
-    draw.text((x, y), temperature, font = font, fill = colour)
-    disp.display(img)
-
-# get_cpu_temperature: gets cpu temp for temperature compensation 
-# Input: none 
-# Output: CPU Temperature 
-def get_cpu_temperature(): 
-    with open("/sys/class/thermal/thermal_zone0/temp", "r") as f: 
-        temp = f.read()
-        temp = int(temp) / 1000
-    return temp
-
-# get_compensate_temperature: temperature compensation 
-# Input: none 
-# Output: compensated temperature 
-def compensate_temperature(): 
-    factor = 2.25
-    cpu_temps = [get_cpu_temperature()] * 5
-    cpu_temp = get_cpu_temperature()
-    cpu_temps = cpu_temps[1:] + [cpu_temp]
-    avg_cpu_temp = sum(cpu_temps) / float(len(cpu_temps))
-    raw_temp = bme280.get_temperature()
-    comp_temp = raw_temp - ((avg_cpu_temp - raw_temp) / factor)
-    return comp_temp
-
-# get_sensor_data: reads data from all enviro+ sensors 
-# input: none
-# output: a dict containing sensor readings linked with the measurement type 
-def get_sensor_data(): 
-    temperature = compensate_temperature() 
-    gas_readings = gas.read_all()
-    pressure = bme280.get_pressure()
-    humidity = bme280.get_humidity
-    lux = ltr559.get_lux()
-
-    try: 
-        raw_oxidising = gas_readings.reducing()
-        raw_reducing = gas_readings.reducing()
-        raw_nh3 = gas_readings.nh3()
-
-        ratio_oxidising = raw_oxidising / R0_OXIDISING
-        ratio_reducing = raw_reducing / R0_REDUCING
-        ratio_nh3 = raw_nh3 / R0_NH3
-
-        if ratio_oxidising > 0: 
-            ppm_oxidising = math.pow(10, math.log10(ratio_oxidising) - 0.8129)
-        else:
-            ppm_oxidising = 0
-
-        if ratio_reducing > 0: 
-            ppm_reducing = math.pow(10, (-1.25 * math.log10(ratio_reducing)) + 0.64)
-        else:
-            ppm_reducing = 0
-
-        if ratio_nh3 > 0: 
-            ppm_nh3 = math.pow(10, (-1.8 * math.log10(ration_nh3)) - 0.163)
-        else: 
-            ppm_nh3 = 0
-
-        data = { "Temperature": temperature, 
-            "Reducing Gas": ppm_reducing, 
-            "Oxidizing Gas": ppm_oxidising, 
-            "Nh3": ppm_nh3, 
-            "Pressure": pressure, 
-            "Humidity": humidity, 
-            "Light": lux
-    }
-    except (TypeError, ValueError):         
-        data = { "Temperature": temperature, 
-            "Reducing Gas": gas_readings.reducing(), 
-            "Oxidizing Gas": gas_readings.oxidising(), 
-            "Nh3": gas_readings.nh3(), 
-            "Pressure": pressure, 
-            "Humidity": humidity, 
-            "Light": lux
-    }
-    return data
-
-# currently a test function for sending data 
-def send_data(data): 
-    if data is None: 
-        return False 
-    
-    try: 
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-        client.connect(hostname = SSH_HOST, username = SSH_USER, key_filename = SSH_KEY_PATH) 
-
-        sftp = client.open_sftp()
+class AirQualityTask:
+    def __init__(
+            self, 
+            stop_event: asyncio.Event,
+            results_q: asyncio.Queue = None,
+    ):
         
-        json_data = json.dumps(data)
-        with sftp.open(REMOTE_FILE_PATH, 'w') as f: 
-            f.write(json_data)
-        sftp.close()
-        client.close()
-        return True
+        self.stop_event = stop_event
+        self.results_q = results_q 
+        self.disp = st7735.ST7735(
+            port = 0, 
+            cs = 1, 
+            dc = "GPIO9", 
+            backlight = "GPIO12", 
+            rotation = 270, 
+            spi_speed_hz = 10000000
+        )
 
-    except paramiko.AuthenticationException:
-        print("Authentication failed. Please check your SSH key and username.")
-        return False
-    except paramiko.SSHException as ssh_err:
-        print(f"SSH error occurred: {ssh_err}")
-        return False
-    except Exception as e:
-        print(f"Failed to send data over SSH: {e}")
-        return False
+        self.disp.begin()
+
+        self.bus = SMBus(1)
+        self.bme280 = BME280(i2c_dev = self.bus)
+
+    # get_cpu_temperature: gets cpu temp for temperature compensation 
+    # Input: none 
+    # Output: CPU Temperature  
+    def get_cpu_temperature(self) -> float: 
+        try:
+            with open("sys/class/thermal/thermal_zone0/temp", "r") as f:
+                temp = int(f.read())/ 1000
+                return temp
+        except Exception:
+            return 0.0
+
+    # get_compensate_temperature: temperature compensation 
+    # Input: none 
+    # Output: compensated temperature 
+    def compensate_temperature(self) -> float: 
+        factor = 2.25 
+        cpu_temps = [self.get_cpu_temperature()] * 5
+        cpu_temp = self.get_cpu_temperature()
+        cpu_temps = cpu_temps[1:] + [cpu_temp]
+        avg_cpu_temp = sum(cpu_temps) / float(len(cpu_temps))
+        raw_temp = self.bme280.get_temperature()
+        comp_temp = raw_temp - ((avg_cpu_temp - raw_temp) / factor)
+        return comp_temp
     
-async def async_main_loop():
-    try:
-        while True:
-            data = await asyncio.to_thread(get_sensor_data)
-            await asyncio.to_thread(write_temp_to_lcd, data["Temperature"])
-            await asyncio.to_thread(send_data, data)
-            await asyncio.sleep(2)
-    except KeyboardInterrupt:
-        disp.set_backlight(0)
+    # get_sensor_data: reads data from all enviro+ sensors 
+    # input: none
+    # output: a dict containing sensor readings linked with the measurement type 
+    def get_sensor_data(self) -> dict: 
+        temperature = self.compensate_temperature() 
+        gas_readings = gas.read_all()
+        pressure = self.bme280.get_pressure()
+        humidity = self.bme280.get_humidity
+        lux = ltr559.get_lux() if hasattr(ltr559, "get_lux") else None
 
-if __name__ == "__main__": 
-    asyncio.run(async_main_loop)
+        try: 
+            raw_oxidising = gas_readings.reducing()
+            raw_reducing = gas_readings.reducing()
+            raw_nh3 = gas_readings.nh3()
+
+            ratio_oxidising = raw_oxidising / R0_OXIDISING
+            ratio_reducing = raw_reducing / R0_REDUCING
+            ratio_nh3 = raw_nh3 / R0_NH3
+
+            if ratio_oxidising > 0: 
+                ppm_oxidising = math.pow(10, math.log10(ratio_oxidising) - 0.8129)
+            else:
+                ppm_oxidising = 0
+
+            if ratio_reducing > 0: 
+                ppm_reducing = math.pow(10, (-1.25 * math.log10(ratio_reducing)) + 0.64)
+            else:
+                ppm_reducing = 0
+
+            if ratio_nh3 > 0: 
+                ppm_nh3 = math.pow(10, (-1.8 * math.log10(ration_nh3)) - 0.163)
+            else: 
+                ppm_nh3 = 0
+
+            data = { "Temperature": temperature, 
+                "Reducing Gas": ppm_reducing, 
+                "Oxidizing Gas": ppm_oxidising, 
+                "Nh3": ppm_nh3, 
+                "Pressure": pressure, 
+                "Humidity": humidity, 
+                "Light": lux
+            }
+        except (TypeError, ValueError):         
+            data = { "Temperature": temperature, 
+                "Reducing Gas": gas_readings.reducing(), 
+                "Oxidizing Gas": gas_readings.oxidising(), 
+                "Nh3": gas_readings.nh3(), 
+                "Pressure": pressure, 
+                "Humidity": humidity, 
+                "Light": lux
+            }
+        return data
+
+    # write_temp_to_lcd: writes temperature measurements to LCD 
+    # input: temperature: the current temperature sensor reading 
+    # return: none 
+    def write_temp_to_lcd(self, temperature: float): 
+        img = Image.new('RGB', (self.disp.width, self.disp.height), color = (0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        rect_colour = (0, 180, 180)
+        draw.rectangle((0, 0, 160, 80), rect_colour)
+
+        font_size = 18 
+        font = ImageFont.truetype(UserFont, font_size)
+
+        colour = (225, 225, 225)
+        disp_temperature = "Temp: {:.2f} *C".format(temperature())
+
+        x = 0 
+        y = 0 
+        draw.text((x, y), temperature, font = font, fill = colour)
+        self.disp.display(img)
+
+    async def step(self): 
+        if self.stop_event.is_set():
+            return
+        data = await asyncio.to_thread(self.get_sensor_data)
+        await asyncio.to_thread(self.write_temp_to_lcd, data["Temperature"])
+
+        if self.results_q: 
+            try: 
+                self.results_q.put_nowait(data)
+            except asyncio.QueueFull:
+                pass
+
+    def shutdown(self):
+        try:
+            self.disp.set_backlight(0)
+        except Exception:
+            pass 
