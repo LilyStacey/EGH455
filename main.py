@@ -1,7 +1,7 @@
 # main.py 
 # main file managing threads and tasks
 # Author: Angela Scells
-# Last Update: 24/09/2025
+# Last Update: 03/10/2025 by Lily Stacey
 
 from __future__ import annotations
 import asyncio
@@ -10,7 +10,7 @@ import signal
 from typing import Awaitable, Callable, Iterable
 
 # ===================== Importing Drone tasks ===================== #
-# from air_quality_task import AirQualityTask
+from Air_Quality.air_quality import AirQualityTask
 from ImageProcessing.camera_task import CameraTask
 # from ip_address_task import ipAddressTask
 # from Web_interface_task import webInterfaceTask
