@@ -53,6 +53,27 @@ class CameraTask:
             self.cap.release()
         cv2.destroyAllWindows()
 
+    def make_detector(self, dict_id):
+            aruco_dict = cv2.aruco.getPredefinedDictionary(dict_id)
+            return cv2.aruco.ArucoDetector(aruco_dict, self.aruco_params)
+
+    def autodetect_aruco_dict(self, gray):
+            """Tries several common aruso dictionaries and returns the one with the most hits."""
+            candidate_dicts = [
+                cv2.aruco.DICT_4X4_50, cv2.aruco.DICT_4X4_100, cv2.aruco.DICT_4X4_250,
+                cv2.aruco.DICT_5X5_50, cv2.aruco.DICT_5X5_100, cv2.aruco.DICT_5X5_250,
+                cv2.aruco.DICT_6X6_50, cv2.aruco.DICT_6X6_100, cv2.aruco.DICT_6X6_250,
+                cv2.aruco.DICT_APRILTAG_36h11  # include if your sheet might be AprilTags
+            ]
+            best = (None, -1, None)  # (dict_id, count, (corners, ids))
+            for d in candidate_dicts:
+                det = self.make_detector(d)
+                corners, ids, _ = det.detectMarkers(gray)
+                cnt = 0 if ids is None else len(ids)
+                if cnt > best[1]:
+                    best = (d, cnt, (corners, ids))
+            return best
+
     # Make data available to other threads
     def _publish(self, payload: Dict[str, Any]) -> None:
         """Called on the event loop thread via call_soon_threadsafe."""
@@ -77,17 +98,36 @@ class CameraTask:
         print("marker")
         timestamp = datetime.now().isoformat()
         src = roi if roi is not None else frame
-        corners, ids, _ = self.aruco_detector.detectMarkers(src)
+
+        # Skip tiny ROIs; use full frame if the crop is too small
+        h, w = src.shape[:2]
+        if min(h, w) < 60:
+            src = frame  # fallback to full frame for robustness
+
+        # Work in grayscale for detection
+        gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+
+        if self.aruco_detector is None:
+            dict_id, count, first = self.autodetect_aruco_dict(gray)
+            if dict_id is not None and count > 0:
+                self.aruco_dict_id = dict_id
+                self.aruco_detector = self.make_detector(dict_id)
+
+        corners, ids, _ = self.aruco_detector.detectMarkers(gray)
+        self.payloads = {}
 
         if ids is not None and len(ids) > 0:
-            cv2.aruco.drawDetectedMarkers(src, corners, ids)
+            cv2.aruco.drawDetectedMarkers(gray, corners, ids)
             self.payloads = {
                 "timestamp": timestamp,
-                "image": src,
-                "ArUco Marker id": ids 
+                "image": gray,
+                "ArUco Marker id": ids, 
+                "info": info
             }
         else:
+            cv2.imshow("YOLOv5 Live", gray)
             print("YOLO said marker ≥80%, but no ArUco found")
+    
 
     # Takes a imaged maked by YOLO box and returns just the box as a image
     # Reduces comput time as only box area is proccesed. 
@@ -161,7 +201,7 @@ class CameraTask:
 
                 roi = self._crop_roi(frame, bbox)
                 info = {"name": name, "cls_id": cls_id, "conf": c, "bbox": bbox}
-                handler_payloads = action(self, frame, roi, info) # ✅ always the same call shape
+                action(frame, roi, info) # always the same call
                 detected_any = True
 
         if(detected_any == False):
@@ -176,7 +216,7 @@ class CameraTask:
 
         # Thread-safe handoff to the event loop -> queue
         if self.results_q:
-            self.loop.call_soon_threadsafe(self._publish)
+            self.loop.call_soon_threadsafe(self._publish, self.payloads)
 
         # Break on 'q' key press
         if cv2.waitKey(1) & 0xFF == ord('q'):
