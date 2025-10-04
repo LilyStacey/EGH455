@@ -1,6 +1,7 @@
 import asyncio
 import threading
 from typing import Any, Dict, Optional
+from datetime import datetime
 
 import cv2
 from ultralytics import YOLO
@@ -16,6 +17,21 @@ class CameraTask:
         self.stop_event = stop_event or asyncio.Event()
         self.cap = None
         self.model = None
+
+        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+        self.aruco_params = cv2.aruco.DetectorParameters()
+        self.aruco_detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
+
+        self.payload = {}
+
+        self.object_actions = {
+        "gauge": self.handle_gauge,
+        "gauge_tip": self.handle_gauge,
+        "gauge_middle": self.handle_gauge,
+        "valve_open": self.handle_valve_open,
+        "valve_closed": self.handle_valve_closed,
+        "marker": self.handle_marker
+        }
 
         print("Starting webcam detection... Press 'q' to quit.")
 
@@ -48,26 +64,46 @@ class CameraTask:
             # drop oldest / newest as desired; simplest: drop this one
             pass
 
-    def handle_gauge():
+    def handle_gauge(self):
         print("gauge")
 
-    def handle_valve_open():
+    def handle_valve_open(self):
         print("valve_open")
 
-    def handle_valve_closed():
+    def handle_valve_closed(self):
         print("valve_closed")
 
-    def handle_marker():
+    def handle_marker(self, frame, roi, info):
         print("marker")
+        timestamp = datetime.now().isoformat()
+        src = roi if roi is not None else frame
+        corners, ids, _ = self.aruco_detector.detectMarkers(src)
 
-    object_actions = {
-        "gauge": handle_gauge,
-        "gauge_tip": handle_gauge,
-        "gauge_middle": handle_gauge,
-        "valve_open": handle_valve_open,
-        "valve_closed": handle_valve_closed,
-        "marker": handle_marker
-    }
+        if ids is not None and len(ids) > 0:
+            cv2.aruco.drawDetectedMarkers(src, corners, ids)
+            self.payloads = {
+                "timestamp": timestamp,
+                "image": src,
+                "ArUco Marker id": ids 
+            }
+        else:
+            print("YOLO said marker ≥80%, but no ArUco found")
+
+    # Takes a imaged maked by YOLO box and returns just the box as a image
+    # Reduces comput time as only box area is proccesed. 
+    def _crop_roi(self, frame, xyxy):
+        h, w = frame.shape[:2]
+        x1, y1, x2, y2 = map(int, xyxy)
+        x1 = max(0, min(w - 1, x1)); x2 = max(0, min(w, x2))
+        y1 = max(0, min(h - 1, y1)); y2 = max(0, min(h, y2))
+        if x2 <= x1 or y2 <= y1:
+            return frame  # fallback
+        return frame[y1:y2, x1:x2]
+    
+    #Turn images from cam into jpeg for sending to ques and using in website.
+    def _encode_jpeg(self, img, quality: int = 85):
+        ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+        return buf.tobytes() if ok else None
 
     def step(self):
         if self.stop_event.is_set():  # NEW: quick exit if stopping
@@ -85,7 +121,7 @@ class CameraTask:
             self.loop.call_soon_threadsafe(self.stop_event.set)
             self.stop_flag.set()
             return
-
+        timestamp = datetime.now().isoformat()
         # Run inference on the frame (as a numpy array)
         self.results = self.model(frame, verbose=False)
         self.result = self.results[0]
@@ -100,44 +136,51 @@ class CameraTask:
 
         # class_names = [result.names[int(cls_id)] for cls_id in detected_class_ids]
 
-        detected_class_ids = []
-        class_names = []
+        detected_any = False
+        
 
         # Check if there are any detected boxes
         if self.result.boxes:
-            for cls_id, conf in zip(self.result.boxes.cls, self.result.boxes.conf):
-                if conf > 0.90:  # confidence > 90%
-                    detected_class_ids.append(int(cls_id))
-                    class_names.append(self.result.names[int(cls_id)])
+            # xyxy: (N,4), cls: (N,), conf: (N,)
+            xyxy = self.result.boxes.xyxy.cpu().numpy()
+            cls  = self.result.boxes.cls.cpu().numpy()
+            conf = self.result.boxes.conf.cpu().numpy()
 
-        if class_names:
-            print(f"Detected objects: {', '.join(set(class_names))}")
-            detected_set = set(class_names)
+            for i in range(len(cls)):
+                c = float(conf[i])
+                if c < 0.9:
+                    continue  # confidence threshhold (90%)
 
-            for name in detected_set:
-                action = object_actions.get(name.lower())  # lowercase just in case
-                if action:
-                    action()
-                else:
-                    print(f"No handler defined for: {name}")
+                cls_id = int(cls[i])
+                name = self.result.names[cls_id].lower()
+                bbox = xyxy[i]  # [x1,y1,x2,y2]
 
-        else:
-            print("⚠️ No objects detected.")
+                action = self.object_actions.get(name)
+                if not action:
+                    continue
 
-        payload = {
-            "classes": detected_class_ids,
-            "names": list(set(class_names)),
-            "count": len(detected_class_ids),
-        }
+                roi = self._crop_roi(frame, bbox)
+                info = {"name": name, "cls_id": cls_id, "conf": c, "bbox": bbox}
+                handler_payloads = action(self, frame, roi, info) # ✅ always the same call shape
+                detected_any = True
+
+        if(detected_any == False):
+            self.payloads = {
+                "timestamp": timestamp,
+                "image": self.annotated_frame, 
+            }
+        
+
+        if not detected_any:
+            print("⚠️ No objects ≥80% confidence.")
 
         # Thread-safe handoff to the event loop -> queue
         if self.results_q:
-            self.loop.call_soon_threadsafe(self._publish, payload)
+            self.loop.call_soon_threadsafe(self._publish)
 
         # Break on 'q' key press
         if cv2.waitKey(1) & 0xFF == ord('q'):
             self.loop.call_soon_threadsafe(self.stop_event.set())
             self.stop_flag.set()
             return
-
         # Release resources
