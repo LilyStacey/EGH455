@@ -20,7 +20,8 @@ class CameraTask:
 
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
         self.aruco_params = cv2.aruco.DetectorParameters()
-        self.aruco_detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
+        #self.aruco_detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
+        self.aruco_detector = None
 
         self.payload = {}
 
@@ -30,7 +31,7 @@ class CameraTask:
         "gauge_middle": self.handle_gauge,
         "valve_open": self.handle_valve_open,
         "valve_closed": self.handle_valve_closed,
-        "marker": self.handle_marker
+        "person": self.handle_marker
         }
 
         print("Starting webcam detection... Press 'q' to quit.")
@@ -95,7 +96,6 @@ class CameraTask:
         print("valve_closed")
 
     def handle_marker(self, frame, roi, info):
-        print("marker")
         timestamp = datetime.now().isoformat()
         src = roi if roi is not None else frame
 
@@ -103,7 +103,9 @@ class CameraTask:
         h, w = src.shape[:2]
         if min(h, w) < 60:
             src = frame  # fallback to full frame for robustness
-
+        #FOR TESTING, set cvtColour to use frame, rember to set back to src after testing
+        #frame = cv2.imread("ImageProcessing\singlemarkersoriginal.jpg")
+        
         # Work in grayscale for detection
         gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
 
@@ -117,7 +119,8 @@ class CameraTask:
         self.payloads = {}
 
         if ids is not None and len(ids) > 0:
-            cv2.aruco.drawDetectedMarkers(gray, corners, ids)
+            cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+            cv2.imshow("YOLOv5 Live", frame)
             self.payloads = {
                 "timestamp": timestamp,
                 "image": gray,
