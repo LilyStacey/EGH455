@@ -1,5 +1,5 @@
-from ultralytics import YOLO
 import cv2
+from ultralytics import YOLO
 
 # 1. Load the YOLOv5 model
 model = YOLO('yolov5s.pt')  # You can also use 'yolov5n.pt' or your custom model
@@ -29,10 +29,10 @@ while True:
 
     # 6. Show frame in window
     cv2.imshow("YOLOv5 Live", annotated_frame)
-    
-    #detected_class_ids = result.boxes.cls.tolist() if result.boxes else []
-    
-   # class_names = [result.names[int(cls_id)] for cls_id in detected_class_ids]
+
+    # detected_class_ids = result.boxes.cls.tolist() if result.boxes else []
+
+    # class_names = [result.names[int(cls_id)] for cls_id in detected_class_ids]
 
     detected_class_ids = []
     class_names = []
