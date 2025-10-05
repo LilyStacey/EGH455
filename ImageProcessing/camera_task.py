@@ -2,16 +2,13 @@ import asyncio
 import threading
 from typing import Any, Dict, Optional
 from datetime import datetime
-import os
-import time
-import shutil
 import math
-import requests
 from PIL import Image
-import io
 import cv2
 from ultralytics import YOLO
 from collections import defaultdict
+import numpy as np
+import pytesseract
 
 
 class CameraTask:
@@ -119,7 +116,75 @@ class CameraTask:
                     color_2,
                     thickness,
                 )
+    
+    # mask_text and ocr_numbers_from_mask are additional function for the identification of the guage text
+    # mask_text takes either red or black and and will singel out the text with that particular colour
+    def mask_text(frame, color='red'):
+        "Return a binary mask for red or black text"
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
+        if color == 'red':
+            # Two hue bands for red
+            lower1 = np.array([0,   90,  80], np.uint8)
+            upper1 = np.array([10, 255, 255], np.uint8)
+            lower2 = np.array([170, 90,  80], np.uint8)
+            upper2 = np.array([180, 255, 255], np.uint8)
+            m1 = cv2.inRange(hsv, lower1, upper1)
+            m2 = cv2.inRange(hsv, lower2, upper2)
+            mask = cv2.bitwise_or(m1, m2)
+        else:
+            # Black/gray: low value & low saturation (exclude colored stuff)
+            # Tweak thresh if needed
+            s, v = hsv[:,:,1], hsv[:,:,2]
+            mask = cv2.inRange(s, 0, 60) & cv2.inRange(v, 0, 120)
+
+        # Clean small noise
+        kernel = np.ones((3,3), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+        return mask
+    # tesseract_psm = 7 for small dissconneced text good for the guage numbers
+    def ocr_numbers_from_mask(img_bgr, mask, tesseract_psm=7):
+        "OCR masked regions; returns list of (numbers, bbox)."
+        # keep only masked pixels
+        masked = cv2.bitwise_and(img_bgr, img_bgr, mask=mask)
+        gray = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
+        gray = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
+        # binary for OCR; Tesseract prefers dark text on light bg
+        _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        if (th == 0).sum() < (th == 255).sum():
+            th = cv2.bitwise_not(th)
+
+        # find candidate regions
+        contours, _ = cv2.findContours((th < 128).astype(np.uint8)*255,
+                                    cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        H, W = th.shape
+        cfg = f"--oem 3 --psm {tesseract_psm} -c tessedit_char_whitelist=0123456789"
+        out = []
+        for cnt in contours:
+            x,y,w,h = cv2.boundingRect(cnt)
+            if w*h < 150 or h < 12:
+                continue
+            pad = 4
+            x0,y0 = max(x-pad,0), max(y-pad,0)
+            x1,y1 = min(x+w+pad, W), min(y+h+pad, H)
+            crop = th[y0:y1, x0:x1]
+
+            # quick deskew per region
+            rect = cv2.minAreaRect(cnt)
+            angle = rect[2]
+            if angle < -45: angle += 90
+            M = cv2.getRotationMatrix2D(((x1-x0)//2, (y1-y0)//2), angle, 1.0)
+            crop = cv2.warpAffine(crop, M, (x1-x0, y1-y0),
+                                flags=cv2.INTER_LINEAR,
+                                borderMode=cv2.BORDER_CONSTANT, borderValue=255)
+
+            txt = pytesseract.image_to_string(crop, config=cfg).strip()
+            digits = "".join(ch for ch in txt if ch.isdigit())
+            if digits:
+                out.append((digits, [int(x0), int(y0), int(x1), int(y1)]))
+        return out
 
     # Make data available to other threads
     def _publish(self, payload: Dict[str, Any]) -> None:
@@ -133,47 +198,51 @@ class CameraTask:
             pass
 
     def handle_gauge(self, frame, detections, full_context):
-        #if data structure is xyxy 
-        center_indexes = info.bbox[1]
-        tip_indexes = info.bbox[2]
 
-        center_x_side_center = center_indexes[0] + ((center_indexes[2]-center_indexes[0])/2)
-        center_y_side_center = center_indexes[1] + ((center_indexes[3]-center_indexes[1])/2)
+        for det in full_context:
+            name = det["name"].lower()
+            if name == "center":
+                center_bbox = det["bbox"]
+            elif name == "needle_tip":
+                needle_bbox = det["bbox"]
 
-        tip_x_side_center = tip_indexes[0] + ((tip_indexes[2]-tip_indexes[0])/2)
-        tip_y_side_center = tip_indexes[1] + ((tip_indexes[3]-tip_indexes[1])/2)
+        if center_bbox is not None and needle_bbox is not None:
+            center_x_side_center = center_bbox[0] + ((center_bbox[2]-center_bbox[0])/2)
+            center_y_side_center = center_bbox[1] + ((center_bbox[3]-center_bbox[1])/2)
 
-        dy = tip_y_side_center - center_y_side_center
-        dx = tip_x_side_center - center_x_side_center
-        theta = math.atan2(dy, dx)
-        theta = math.degrees(theta)
-        theta = round(theta)
+            tip_x_side_center = needle_bbox[0] + ((needle_bbox[2]-needle_bbox[0])/2)
+            tip_y_side_center = needle_bbox[1] + ((needle_bbox[3]-needle_bbox[1])/2)
 
-        # Changes negative theta to appropriate value
-        if theta < 0:
-            theta *= -1
-            theta = (180 - theta) + 180
+            dy = tip_y_side_center - center_y_side_center
+            dx = tip_x_side_center - center_x_side_center
+            theta = math.atan2(dy, dx)
+            theta = math.degrees(theta)
+            theta = round(theta)
 
-        # Sets new starting point
-        theta = theta - 90
+            # Changes negative theta to appropriate value
+            if theta < 0:
+                theta *= -1
+                theta = (180 - theta) + 180
 
-        # Changes negative thetat to appropriate value
-        if theta < 0:
-            theta *= -1
-            theta = theta + 270
+            # Sets new starting point
+            theta = theta - 90
 
-        # theta of 74 is 500 psi and theta of 173 is 2,000 psi
-        if theta <= 74 or theta >= 173:
-            Drill_Trigger = False
-        
+            # Changes negative thetat to appropriate value
+            if theta < 0:
+                theta *= -1
+                theta = theta + 270
 
+            # theta of 74 is 500 psi and theta of 173 is 2,000 psi
+            if theta <= 74 or theta >= 173:
+                Drill_Trigger = False
+            
     def handle_valve_open(self, frame, detections, full_context):
         timestamp = datetime.now().isoformat()
         cv2.imshow("YOLOv5 Live", frame)
         self.payload = {
                 "timestamp": timestamp,
                 "image": frame,
-                "info": info,
+                "info": detections,
                 "Valve_position": "open", 
             }
 
@@ -183,7 +252,7 @@ class CameraTask:
         self.payload = {
                 "timestamp": timestamp,
                 "image": frame,
-                "info": info,
+                "info": detections,
                 "Valve_position": "closed", 
             }
 
