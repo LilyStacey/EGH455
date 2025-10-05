@@ -89,11 +89,25 @@ class CameraTask:
     def handle_gauge(self):
         print("gauge")
 
-    def handle_valve_open(self):
-        print("valve_open")
+    def handle_valve_open(self, frame, info):
+        timestamp = datetime.now().isoformat()
+        cv2.imshow("YOLOv5 Live", frame)
+        self.payload = {
+                "timestamp": timestamp,
+                "image": frame,
+                "info": info,
+                "Valve_position": "open", 
+            }
 
-    def handle_valve_closed(self):
-        print("valve_closed")
+    def handle_valve_closed(self, frame, info):
+        timestamp = datetime.now().isoformat()
+        cv2.imshow("YOLOv5 Live", frame)
+        self.payload = {
+                "timestamp": timestamp,
+                "image": frame,
+                "info": info,
+                "Valve_position": "closed", 
+            }
 
     def handle_marker(self, frame, roi, info):
         timestamp = datetime.now().isoformat()
@@ -104,10 +118,10 @@ class CameraTask:
         if min(h, w) < 60:
             src = frame  # fallback to full frame for robustness
         #FOR TESTING, set cvtColour to use frame, rember to set back to src after testing
-        #frame = cv2.imread("ImageProcessing\singlemarkersoriginal.jpg")
-        
+        frame = cv2.imread("ImageProcessing\singlemarkersoriginal.jpg")
+
         # Work in grayscale for detection
-        gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         if self.aruco_detector is None:
             dict_id, count, first = self.autodetect_aruco_dict(gray)
@@ -116,20 +130,21 @@ class CameraTask:
                 self.aruco_detector = self.make_detector(dict_id)
 
         corners, ids, _ = self.aruco_detector.detectMarkers(gray)
-        self.payloads = {}
+        self.payload = {}
 
         if ids is not None and len(ids) > 0:
             cv2.aruco.drawDetectedMarkers(frame, corners, ids)
             cv2.imshow("YOLOv5 Live", frame)
-            self.payloads = {
+            self.payload = {
                 "timestamp": timestamp,
                 "image": gray,
-                "ArUco Marker id": ids, 
-                "info": info
+                "info": info,
+                "ArUco_Marker_id": ids 
             }
         else:
             cv2.imshow("YOLOv5 Live", gray)
             print("YOLO said marker ≥80%, but no ArUco found")
+        return self.payload
     
 
     # Takes a imaged maked by YOLO box and returns just the box as a image
@@ -204,7 +219,7 @@ class CameraTask:
 
                 roi = self._crop_roi(frame, bbox)
                 info = {"name": name, "cls_id": cls_id, "conf": c, "bbox": bbox}
-                action(frame, roi, info) # always the same call
+                self.payloads = action(self.annotated_frame, roi, info) # always the same call
                 detected_any = True
 
         if(detected_any == False):
@@ -219,6 +234,7 @@ class CameraTask:
 
         # Thread-safe handoff to the event loop -> queue
         if self.results_q:
+            print(self.payloads)
             self.loop.call_soon_threadsafe(self._publish, self.payloads)
 
         # Break on 'q' key press
