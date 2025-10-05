@@ -2,9 +2,16 @@ import asyncio
 import threading
 from typing import Any, Dict, Optional
 from datetime import datetime
-
+import os
+import time
+import shutil
+import math
+import requests
+from PIL import Image
+import io
 import cv2
 from ultralytics import YOLO
+from collections import defaultdict
 
 
 class CameraTask:
@@ -31,7 +38,7 @@ class CameraTask:
         "gauge_middle": self.handle_gauge,
         "valve_open": self.handle_valve_open,
         "valve_closed": self.handle_valve_closed,
-        "person": self.handle_marker
+        "marker": self.handle_marker
         }
 
         print("Starting webcam detection... Press 'q' to quit.")
@@ -75,6 +82,45 @@ class CameraTask:
                     best = (d, cnt, (corners, ids))
             return best
 
+    def renderAnnotatedGuage(self,coordinate,frame,info,theta):
+            
+            for label_index, label in info["name"]:
+                if "Center" in label:
+                    info[label_index] = label + " " + str(theta) + " deg"
+
+                if "Needle_Tip" in label:
+                    psi = int(15.21 * theta - 638.21) # TODO: Fill out the right values (we'll talk about this later in this post)
+                    info[label_index] = label + " " + str(psi) + " psi"
+                # Writes text and boxes on each frame - used for boxes, degrees, and psi
+
+            for object_coordinate_index, object_coordinate in enumerate(coordinate):
+
+                # Recangle settings
+                start_point = (int(object_coordinate[0]), int(object_coordinate[1]))
+                end_point = (int(object_coordinate[2]), int(object_coordinate[3]))
+                color_1 = (255, 0, 255)  # Magenta
+                color_2 = (255, 255, 255)  # White
+                thickness = 1
+
+                cv2.rectangle(frame, start_point, end_point, color_1, thickness)
+
+                # For text
+                start_point_text = (start_point[0], max(start_point[1] - 5, 0))
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                fontScale = 0.5
+                thickness = 1
+
+                cv2.putText(
+                    frame,
+                    info[name[object_coordinate_index]],
+                    start_point_text,
+                    font,
+                    fontScale,
+                    color_2,
+                    thickness,
+                )
+
+
     # Make data available to other threads
     def _publish(self, payload: Dict[str, Any]) -> None:
         """Called on the event loop thread via call_soon_threadsafe."""
@@ -86,10 +132,42 @@ class CameraTask:
             # drop oldest / newest as desired; simplest: drop this one
             pass
 
-    def handle_gauge(self):
-        print("gauge")
+    def handle_gauge(self, frame, detections, full_context):
+        #if data structure is xyxy 
+        center_indexes = info.bbox[1]
+        tip_indexes = info.bbox[2]
 
-    def handle_valve_open(self, frame, info):
+        center_x_side_center = center_indexes[0] + ((center_indexes[2]-center_indexes[0])/2)
+        center_y_side_center = center_indexes[1] + ((center_indexes[3]-center_indexes[1])/2)
+
+        tip_x_side_center = tip_indexes[0] + ((tip_indexes[2]-tip_indexes[0])/2)
+        tip_y_side_center = tip_indexes[1] + ((tip_indexes[3]-tip_indexes[1])/2)
+
+        dy = tip_y_side_center - center_y_side_center
+        dx = tip_x_side_center - center_x_side_center
+        theta = math.atan2(dy, dx)
+        theta = math.degrees(theta)
+        theta = round(theta)
+
+        # Changes negative theta to appropriate value
+        if theta < 0:
+            theta *= -1
+            theta = (180 - theta) + 180
+
+        # Sets new starting point
+        theta = theta - 90
+
+        # Changes negative thetat to appropriate value
+        if theta < 0:
+            theta *= -1
+            theta = theta + 270
+
+        # theta of 74 is 500 psi and theta of 173 is 2,000 psi
+        if theta <= 74 or theta >= 173:
+            Drill_Trigger = False
+        
+
+    def handle_valve_open(self, frame, detections, full_context):
         timestamp = datetime.now().isoformat()
         cv2.imshow("YOLOv5 Live", frame)
         self.payload = {
@@ -99,7 +177,7 @@ class CameraTask:
                 "Valve_position": "open", 
             }
 
-    def handle_valve_closed(self, frame, info):
+    def handle_valve_closed(self, frame, detections, full_context):
         timestamp = datetime.now().isoformat()
         cv2.imshow("YOLOv5 Live", frame)
         self.payload = {
@@ -109,16 +187,14 @@ class CameraTask:
                 "Valve_position": "closed", 
             }
 
-    def handle_marker(self, frame, roi, info):
+    def handle_marker(self, frame, detections, full_context):
         timestamp = datetime.now().isoformat()
-        src = roi if roi is not None else frame
-
-        # Skip tiny ROIs; use full frame if the crop is too small
-        h, w = src.shape[:2]
-        if min(h, w) < 60:
-            src = frame  # fallback to full frame for robustness
-        #FOR TESTING, set cvtColour to use frame, rember to set back to src after testing
-        frame = cv2.imread("ImageProcessing\singlemarkersoriginal.jpg")
+        for det in detections:
+            src = det["roi"] if det["roi"] is not None else frame
+            # Skip tiny ROIs; use full frame if the crop is too small
+            h, w = src.shape[:2]
+            if min(h, w) < 60:
+                src = frame  # fallback to full frame for robustness
 
         # Work in grayscale for detection
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -138,7 +214,7 @@ class CameraTask:
             self.payload = {
                 "timestamp": timestamp,
                 "image": gray,
-                "info": info,
+                "info": detections,
                 "ArUco_Marker_id": ids 
             }
         else:
@@ -180,10 +256,15 @@ class CameraTask:
             self.stop_flag.set()
             return
         timestamp = datetime.now().isoformat()
+        
+        #FOR TESTING Aruco Markers!!!!
+        #frame = cv2.imread("ImageProcessing\singlemarkersoriginal.jpg")
+
         # Run inference on the frame (as a numpy array)
         self.results = self.model(frame, verbose=False)
         self.result = self.results[0]
 
+        
         # Visualize detections on frame
         self.annotated_frame = self.result.plot()
 
@@ -195,47 +276,59 @@ class CameraTask:
         # class_names = [result.names[int(cls_id)] for cls_id in detected_class_ids]
 
         detected_any = False
+        grouped = defaultdict(list)
         
 
         # Check if there are any detected boxes
-        if self.result.boxes:
+        if getattr(self.result, "boxes", None) and len(self.result.boxes) > 0:
             # xyxy: (N,4), cls: (N,), conf: (N,)
             xyxy = self.result.boxes.xyxy.cpu().numpy()
             cls  = self.result.boxes.cls.cpu().numpy()
             conf = self.result.boxes.conf.cpu().numpy()
 
-            for i in range(len(cls)):
-                c = float(conf[i])
+            for bbox, cls_id, c in zip(xyxy, cls, conf):
+                c = float(c)
                 if c < 0.9:
-                    continue  # confidence threshhold (90%)
-
-                cls_id = int(cls[i])
+                    continue
+                cls_id = int(cls_id)
                 name = self.result.names[cls_id].lower()
-                bbox = xyxy[i]  # [x1,y1,x2,y2]
-
                 action = self.object_actions.get(name)
                 if not action:
                     continue
-
                 roi = self._crop_roi(frame, bbox)
-                info = {"name": name, "cls_id": cls_id, "conf": c, "bbox": bbox}
-                self.payloads = action(self.annotated_frame, roi, info) # always the same call
                 detected_any = True
+                grouped[action].append({
+                    "name": name,
+                    "cls_id": cls_id,
+                    "conf": c,
+                    "bbox": bbox,
+                    "roi": roi,
+                })
 
-        if(detected_any == False):
-            self.payloads = {
+            # Save the current frame’s boxes
+            self.current_detections = [d for batch in grouped.values() for d in batch]
+
+            # Call each action once with its batch
+            for action, detections in grouped.items():
+                # Action is gotten from object_actions list and is based on the returned text of cls from YOLO image
+                # full_context = self.current_detections contails all info on other boxes
+                full_context = self.current_detections
+                payload = action(self.annotated_frame, detections,full_context)
+            
+                if payload is None:
+                    continue
+
+        if not detected_any:
+            self.payload = {
                 "timestamp": timestamp,
                 "image": self.annotated_frame, 
             }
         
-
         if not detected_any:
             print("⚠️ No objects ≥80% confidence.")
-
         # Thread-safe handoff to the event loop -> queue
         if self.results_q:
-            print(self.payloads)
-            self.loop.call_soon_threadsafe(self._publish, self.payloads)
+            self.loop.call_soon_threadsafe(self._publish, self.payload)
 
         # Break on 'q' key press
         if cv2.waitKey(1) & 0xFF == ord('q'):
