@@ -11,7 +11,7 @@ from typing import Awaitable, Callable, Iterable
 
 # ===================== Importing Drone tasks ===================== #
 from Air_Quality.air_quality import AirQualityTask
-from ImageProcessing.camera_task import CameraTask
+from ImageProcessing.cameraTask import CameraTask
 # from ip_address_task import ipAddressTask
 # from Web_interface_task import webInterfaceTask
 
