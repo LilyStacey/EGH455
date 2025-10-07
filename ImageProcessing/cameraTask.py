@@ -24,7 +24,7 @@ class CameraTask:
         # Connect to the roboflow API
         self.model = InferenceHTTPClient(
             api_url="https://serverless.roboflow.com",
-            api_key="tD2CNvbXmeLSQZ5QGdup"  # TODO: Retrain model for other detection targets
+            api_key="tD2CNvbXmeLSQZ5QGdup"
         )
 
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
@@ -329,7 +329,7 @@ class CameraTask:
         # run inference on a local image (from roboflow)
         print(self.model.infer(
             frame,
-            model_id="gauge-video-frames-mocuo/1" # TODO: Update model ID with API key
+            model_id="gauge-video-frames-mocuo/2"
         ))
 
         timestamp = datetime.now().isoformat()
