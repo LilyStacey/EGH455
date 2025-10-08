@@ -1,0 +1,14 @@
+flask
+fonts.ttf
+logging 
+math
+os 
+PIL
+psutil
+random
+requests
+signal
+socket 
+st7735
+threading
+time
