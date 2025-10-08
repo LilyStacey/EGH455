@@ -1,0 +1,5 @@
+[console_scripts]
+hatch-fancy-pypi-readme = hatch_fancy_pypi_readme.__main__:main
+
+[hatch]
+fancy-pypi-readme = hatch_fancy_pypi_readme.hooks
