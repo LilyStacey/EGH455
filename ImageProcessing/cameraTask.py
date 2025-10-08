@@ -25,11 +25,6 @@ class CameraTask:
         self._inited = False
         self.stop_event = stop_event or asyncio.Event()
         self.cap = None
-        # Connect to the roboflow API
-        self.model = InferenceHTTPClient(
-            api_url="https://serverless.roboflow.com",
-            api_key="tD2CNvbXmeLSQZ5QGdup"
-        )
 
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
         self.aruco_params = cv2.aruco.DetectorParameters()
@@ -51,9 +46,16 @@ class CameraTask:
 
     def _init_hw(self):
         # Load the YOLOv5 model
-        self.model = YOLO('yolov5s.pt')  # Replace with custom model 'yolov5n.pt' once completed
+        #self.model = YOLO('yolov5s.pt')  # Replace with custom model 'yolov5n.pt' once completed
+
+        # Connect to the roboflow API
+        self.model = InferenceHTTPClient(
+            api_url="https://serverless.roboflow.com",
+            api_key="tD2CNvbXmeLSQZ5QGdup"
+        )
+
         # Open webcam (0 = default camera) needs to be updated for the onboard camera not laptop webcam
-        self.cap = cv2.VideoCapture(0)
+        self.cap = cv2.VideoCapture(23) # On bottom USB3 port, 23-26, 31-34 were identifiable
 
         if not self.cap.isOpened():
             print("Cannot open camera")

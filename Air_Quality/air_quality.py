@@ -10,6 +10,7 @@ import paramiko
 import json
 import time
 
+import st7735
 from PIL import Image, ImageDraw, ImageFont
 from fonts.ttf import RobotoBold as UserFont
 from bme280 import BME280

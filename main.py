@@ -62,8 +62,7 @@ class App:
             stop_event=self.stop_event,
             results_q=self._results_q,
         )
-        self.aq = AirQualityTask( 
-            loop=loop,
+        self.aq = AirQualityTask(
             stop_event=self.stop_event,
             results_q=self._results_q,
         )
@@ -97,7 +96,7 @@ class App:
         self.stopping.set()
         logging.info("stopping...")
         for t in self.tasks: 
-            t.shutdown()
+            #t.shutdown()
             t.cancel()
         # Gather with return_exceptions to ensure all are awaited
         await asyncio.gather(*self.tasks, return_exceptions=True)
