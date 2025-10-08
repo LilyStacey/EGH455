@@ -1,7 +1,7 @@
 # main.py 
 # main file managing threads and tasks
 # Author: Angela Scells
-# Last Update: 03/10/2025 by Lily Stacey
+# Last Update: 08/10/2025 by Lily Stacey
 
 from __future__ import annotations
 import asyncio
@@ -12,7 +12,6 @@ from typing import Awaitable, Callable, Iterable
 # ===================== Importing Drone tasks ===================== #
 from Air_Quality.air_quality import AirQualityTask
 from ImageProcessing.cameraTask import CameraTask
-# from ip_address_task import ipAddressTask
 # from Web_interface_task import webInterfaceTask
 
 
@@ -63,7 +62,13 @@ class App:
             stop_event=self.stop_event,
             results_q=self._results_q,
         )
+        self.aq = AirQualityTask( 
+            loop=loop,
+            stop_event=self.stop_event,
+            results_q=self._results_q,
+        )
         self.tasks.append(asyncio.create_task(periodic("camera capturing", 0.2, self.cam.step)))
+        self.tasks.append(asyncio.create_task(periodic("air quality reading", 2.0, self.aq.step)))
         logging.info("tasks started")
 
     #Task temple for a consumer of Camtasks
