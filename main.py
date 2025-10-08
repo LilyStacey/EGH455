@@ -95,7 +95,7 @@ class App:
         if self.stopping.is_set():
             return
         self.stopping.set()
-        logging.info("stopping…")
+        logging.info("stopping...")
         for t in self.tasks: 
             t.shutdown()
             t.cancel()
@@ -109,7 +109,7 @@ class App:
 
 async def amain() -> None:
     setup_logging()
-    logging.info("app starting…")
+    logging.info("app starting...")
 
     stop_called = asyncio.Event()
 
