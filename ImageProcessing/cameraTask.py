@@ -1,3 +1,7 @@
+# Implements target acquisition & image processing functionality
+# Author: Angela Scells
+# Last Update: 08/10/2025 by Hunter Wilde
+
 import asyncio
 import math
 import threading
