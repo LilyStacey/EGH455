@@ -325,7 +325,7 @@ class CameraTask:
         success, frame = self.cap.read()
 
         if not success:
-            print("⚠️ Failed to grab frame")
+            print("Failed to grab frame")
             self.loop.call_soon_threadsafe(self.stop_event.set)
             self.stop_flag.set()
             return
@@ -403,7 +403,7 @@ class CameraTask:
             }
 
         if not detected_any:
-            print("⚠️ No objects ≥80% confidence.")
+            print("No objects >=80% confidence.")
 
         # Thread-safe handoff to the event loop -> queue
         if self.results_q:
