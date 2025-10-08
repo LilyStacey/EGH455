@@ -1,14 +1,15 @@
 # air_quality.py 
 # reads sensor data from enviro+ board 
 # Author: Lily Stacey
-# Last Update: 03/10/2025
+# Last Update: 09/10/2025
 
 import asyncio
-import logging 
 import math
 import paramiko
 import json
 import time
+import numpy as np 
+import threading
 
 import st7735
 from PIL import Image, ImageDraw, ImageFont
@@ -28,24 +29,20 @@ R0_OXIDISING = 200000
 R0_REDUCING = 150000 
 R0_NH3 = 570000    
 
-# Logging Config
-logging.basicConfig(
-    format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
-    level=logging.INFO,
-    datefmt="%Y-%m-%d %H:%M:%S")
-
-logging.info(""" air_quality.py - Read Data from Enviro+ Sensors  
-             Press ctrl+c to exit""") 
-
 class AirQualityTask:
     def __init__(
             self, 
+            loop: asyncio.AbstractEventLoop,
             stop_event: asyncio.Event,
-            results_q: asyncio.Queue = None,
-    ):
+            results_q: Optional[asyncio.Queue] | None = None):
         
-        self.stop_event = stop_event
+        self.loop = loop
+        self.stop_flag = threading.Event()
+        self.inited = False
+        self.stop_event = stop_event or asyncio.Event()
         self.results_q = results_q 
+        self.cap = None
+
         self.disp = st7735.ST7735(
             port = 0, 
             cs = 1, 

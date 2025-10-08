@@ -63,6 +63,7 @@ class App:
             results_q=self._results_q,
         )
         self.aq = AirQualityTask(
+            loop = loop,
             stop_event=self.stop_event,
             results_q=self._results_q,
         )
