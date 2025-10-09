@@ -10,6 +10,7 @@ import json
 import time
 import numpy as np 
 import threading
+from typing import Optional
 
 import st7735
 from PIL import Image, ImageDraw, ImageFont
@@ -88,7 +89,7 @@ class AirQualityTask:
         temperature = self.compensate_temperature() 
         gas_readings = gas.read_all()
         pressure = self.bme280.get_pressure()
-        humidity = self.bme280.get_humidity
+        humidity = self.bme280.get_humidity()
         lux = ltr559.get_lux() if hasattr(ltr559, "get_lux") else None
 
         try: 
@@ -147,7 +148,7 @@ class AirQualityTask:
         font = ImageFont.truetype(UserFont, font_size)
 
         colour = (225, 225, 225)
-        disp_temperature = "Temp: {:.2f} *C".format(temperature())
+        disp_temperature = "Temp: {:.2f} *C".format(temperature)
 
         x = 0 
         y = 0 
