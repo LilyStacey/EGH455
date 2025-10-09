@@ -32,7 +32,7 @@ class AirQualityTask:
             self, 
             loop: asyncio.AbstractEventLoop,
             stop_event: asyncio.Event,
-            results_q: Optional[asyncio.Queue] | None = None):
+            results_q: Optional[asyncio.Queue] = None ):
         
         self.loop = loop
         self.stop_flag = threading.Event()
