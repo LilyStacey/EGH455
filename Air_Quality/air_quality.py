@@ -62,7 +62,7 @@ class AirQualityTask:
     # Output: CPU Temperature  
     def get_cpu_temperature(self) -> float: 
         try:
-            with open("sys/class/thermal/thermal_zone0/temp", "r") as f:
+            with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
                 temp = int(f.read())/ 1000
                 return temp
         except Exception:
@@ -92,7 +92,7 @@ class AirQualityTask:
         lux = ltr559.get_lux() if hasattr(ltr559, "get_lux") else None
 
         try: 
-            raw_oxidising = gas_readings.reducing()
+            raw_oxidising = gas_readings.oxidising()
             raw_reducing = gas_readings.reducing()
             raw_nh3 = gas_readings.nh3()
 
@@ -111,7 +111,7 @@ class AirQualityTask:
                 ppm_reducing = 0
 
             if ratio_nh3 > 0: 
-                ppm_nh3 = math.pow(10, (-1.8 * math.log10(ration_nh3)) - 0.163)
+                ppm_nh3 = math.pow(10, (-1.8 * math.log10(ratio_nh3)) - 0.163)
             else: 
                 ppm_nh3 = 0
 
@@ -151,7 +151,7 @@ class AirQualityTask:
 
         x = 0 
         y = 0 
-        draw.text((x, y), temperature, font = font, fill = colour)
+        draw.text((x, y), disp_temperature, font = font, fill = colour)
         self.disp.display(img)
 
     async def step(self): 
