@@ -52,6 +52,7 @@ class App:
         self.stopping = asyncio.Event()
         self.stop_event = stop_event
         self.cam: CameraTask | None = None
+        self.aq: AirQualityTask | None = None
         self._results_q: asyncio.Queue = asyncio.Queue(maxsize=2)
 
     async def start(self) -> None:
