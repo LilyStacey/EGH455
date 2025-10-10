@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UAV Payload Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin:0; padding:0;
+    background-color: white;
+    color: black;
+}
+header {
+    padding: 10px;
+    background-color: #0077cc;
+    color: white;
+    text-align: center;
+}
+.container {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 10px;
+}
+.card {
+    flex: 1 1 300px;
+    margin: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+canvas { max-width: 100%; }
+.dark-mode { background-color: #1e1e1e; color: white; }
+.dark-mode .card { background-color: #333; }
+.scrollable { max-height: 500px; overflow-y: auto; }
+img { max-width: 100%; height: auto; border-radius: 8px; }
+</style>
+</head>
+<body>
+<header>
+    <h1>UAV Payload Dashboard</h1>
+</header>
+
+<div class="container scrollable">
+    <div class="card">
+        <h3>Live Camera Feed</h3>
+        <img id="cameraFeed" src="/camera_feed">
+    </div>
+    <div class="card">
+        <h3>Sensor Data</h3>
+        <canvas id="sensorChart"></canvas>
+    </div>
+    <div class="card">
+        <h3>Logs</h3>
+        <ul id="logList"></ul>
+    </div>
+</div>
+
+<script>
+const darkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+if(darkMode) document.body.classList.add('dark-mode');
+
+const ctx = document.getElementById('sensorChart').getContext('2d');
+const sensorChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [
+            {label:'Temperature (°C)', data:[], borderColor:'red', fill:false},
+            {label:'Pressure (hPa)', data:[], borderColor:'blue', fill:false},
+            {label:'Humidity (%)', data:[], borderColor:'green', fill:false},
+            {label:'Light (lux)', data:[], borderColor:'orange', fill:false},
+            {label:'Reducing Gas (ppm)', data:[], borderColor:'purple', fill:false},
+            {label:'Oxidising Gas (ppm)', data:[], borderColor:'pink', fill:false},
+            {label:'NH3 (ppm)', data:[], borderColor:'brown', fill:false},
+        ]
+    },
+    options: {
+        responsive:true,
+        plugins:{legend:{labels:{color: darkMode ? 'white':'black'}}},
+        scales:{
+            x:{ticks:{color: darkMode ? 'white':'black'}},
+            y:{ticks:{color: darkMode ? 'white':'black'}}
+        }
+    }
+});
+
+function updateSensors(){
+    fetch('/api/sensors').then(r=>r.json()).then(data=>{
+        const time = new Date().toLocaleTimeString();
+        sensorChart.data.labels.push(time);
+        if(sensorChart.data.labels.length>20) sensorChart.data.labels.shift();
+        ['Temperature','Pressure','Humidity','Light','Reducing Gas','Oxidising Gas','Nh3'].forEach((k,i)=>{
+            sensorChart.data.datasets[i].data.push(data[k]||0);
+            if(sensorChart.data.datasets[i].data.length>20) sensorChart.data.datasets[i].data.shift();
+        });
+        sensorChart.update();
+    });
+}
+
+function updateLogs(){
+    fetch('/logs').then(r=>r.json()).then(data=>{
+        const logList = document.getElementById('logList');
+        logList.innerHTML = '';
+        data.forEach(f=>{ let li = document.createElement('li'); li.textContent=f; logList.appendChild(li); });
+    });
+}
+
+setInterval(updateSensors,5000);
+setInterval(updateLogs,10000);
+</script>
+</body>
+</html>
