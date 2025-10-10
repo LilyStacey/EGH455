@@ -11,12 +11,11 @@ from PIL import Image, ImageDraw, ImageFont
 import os 
 import requests 
 
-
-hostname = socket.gethostname()
-IPAddr = socket.gethostbyname(hostname) 
-
-response = requests.get("https://api.ipify.org")
-public_ip = response.text.strip()
+# Get IP address by reaching out to Google's public DNS server
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.connect(("8.8.8.8", 80))
+public_ip = s.getsockname()[0]
+s.close()
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s",
@@ -55,6 +54,7 @@ font = ImageFont.truetype(UserFont, font_size)
 text_colour = (255, 255, 255)
 back_colour = (255, 0, 0)
 
+#message = "IP: " + public_ip
 message = "IP: " + public_ip
 
 x1, y1, x2, y2 = font.getbbox(message)
