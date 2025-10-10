@@ -9,11 +9,13 @@ fonts
 fonttools
 gpiod
 gpiodevice
+gpiozero
 hatch
 hatch-fancy-pypi-readme
 inference_sdk
 isort
-logging 
+lgpio
+logging
 numpy
 opencv-python
 paho-mqtt
