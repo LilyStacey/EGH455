@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UAV Dashboard</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="light-mode">
+
+<nav>
+    <button onclick="showTab('main')">Main</button>
+    <button onclick="showTab('charts')">Charts</button>
+    <button onclick="showTab('camera')">Camera</button>
+    <button onclick="showTab('logs')">Logs</button>
+    <button onclick="toggleDarkLight()">Toggle Dark/Light</button>
+</nav>
+
+<div id="main" class="tab">
+    <h2>Live Sensor Data</h2>
+    <pre id="sensor-data">Loading...</pre>
+</div>
+
+<div id="charts" class="tab" style="display:none;">
+    <h2>Sensor Charts</h2>
+    <canvas id="chartsCanvas" width="1200" height="500"></canvas>
+</div>
+
+<div id="camera" class="tab" style="display:none;">
+    <h2>Live Camera Feed</h2>
+    <img id="live-feed" width="800" height="600" alt="Camera feed"/>
+</div>
+
+<div id="logs" class="tab" style="display:none;">
+    <h2>Logged Data Files</h2>
+    <ul id="log-list"></ul>
+</div>
+
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
+
+

@@ -1,0 +1,9 @@
+flask
+Pillow
+numpy
+opencv-python
+chart.js
+pytesseract
+ultralytics
+smbus2
+asyncio
