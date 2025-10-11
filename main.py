@@ -72,25 +72,40 @@ class App:
         self.tasks.append(asyncio.create_task(periodic("air quality reading", 2.0, self.aq.step)))
         logging.info("tasks started")
 
-    #Task temple for a consumer of Camtasks
-    # async def detection_consumer():
-    #         while not self._stop_event.is_set():
-    #             try:
-    #                 # timeout so we can check stop_event periodically
-    #                 payload = await asyncio.wait_for(self._results_q.get(), timeout=0.5)
-    #             except asyncio.TimeoutError:
-    #                 continue
-    #             try:
-    #                 # === Use camera info here ===
-    #                 # e.g., log or route to another subsystem
-    #                 if payload["names"]:
-    #                     logging.info(f"Detected: {payload['names']} (count={payload['count']})")
-    #             finally:
-    #                 self._results_q.task_done()
+   # Inside App class, after starting cam and aq tasks
+self.latest_data = {
+    "camera": None,  
+    "temp": None,
+    "hum": None,
+    "light": None,
+    "press": None,
+    "red_gas": None,
+    "ox_gas": None,
+    "nh3": None,
+}
 
-    #     self._tasks.append(asyncio.create_task(detection_consumer()))
+async def detection_consumer():
+    while not self.stopping.is_set():
+        try:
+            # Wait for new payload from CameraTask or AirQualityTask
+            payload = await asyncio.wait_for(self._results_q.get(), timeout=0.5)
+        except asyncio.TimeoutError:
+            continue
+        try:
+            # === Camera data ===
+            if "names" in payload:
+                self.latest_data["camera"] = payload  # store latest camera payload
+                logging.info(f"Detected: {payload['names']} (count={payload['count']})")
+            # === Air quality data ===
+            for key in ["temp","hum","light","press","red_gas","ox_gas","nh3"]:
+                if key in payload:
+                    self.latest_data[key] = payload[key]
+        finally:
+            self._results_q.task_done()
 
-    #     logging.info("tasks started")
+# Create and start consumer task
+self.tasks.append(asyncio.create_task(detection_consumer()))
+logging.info("detection consumer started")
 
     async def stop(self) -> None:
         if self.stopping.is_set():
