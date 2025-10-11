@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 import cv2
+import depthai as dai
 import numpy as np
 import pytesseract
 from PIL import Image
