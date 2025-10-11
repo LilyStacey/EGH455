@@ -16,6 +16,8 @@ from PIL import Image
 from inference_sdk import InferenceHTTPClient
 from ultralytics import YOLO
 
+from Drill.drill import perform_drilling
+
 class CameraTask:
     def __init__(self, loop: asyncio.AbstractEventLoop, stop_event: asyncio.Event,
                  results_q: Optional[asyncio.Queue] | None = None):
@@ -241,7 +243,8 @@ class CameraTask:
 
             # theta of 74 is 500 psi and theta of 173 is 2,000 psi
             if theta <= 74 or theta >= 173:
-                Drill_Trigger = False
+                # Trigger the drill
+                perform_drilling()
 
     def handle_valve_open(self, frame, detections, full_context):
         timestamp = datetime.now().isoformat()
