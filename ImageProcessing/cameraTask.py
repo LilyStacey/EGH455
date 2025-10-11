@@ -236,7 +236,7 @@ class CameraTask:
             # Sets new starting point
             theta = theta - 90
 
-            # Changes negative thetat to appropriate value
+            # Changes negative theta to appropriate value
             if theta < 0:
                 theta *= -1
                 theta = theta + 270

@@ -90,9 +90,9 @@ class AirQualityTask:
         lux = ltr559.get_lux() if hasattr(ltr559, "get_lux") else None
 
         try: 
-            raw_oxidising = gas_readings.oxidising()
-            raw_reducing = gas_readings.reducing()
-            raw_nh3 = gas_readings.nh3()
+            raw_oxidising = gas_readings.oxidising
+            raw_reducing = gas_readings.reducing
+            raw_nh3 = gas_readings.nh3
 
             ratio_oxidising = raw_oxidising / R0_OXIDISING
             ratio_reducing = raw_reducing / R0_REDUCING
@@ -123,9 +123,9 @@ class AirQualityTask:
             }
         except (TypeError, ValueError):         
             data = { "Temperature": temperature, 
-                "Reducing Gas": gas_readings.reducing(), 
-                "Oxidizing Gas": gas_readings.oxidising(), 
-                "Nh3": gas_readings.nh3(), 
+                "Reducing Gas": gas_readings.reducing, 
+                "Oxidizing Gas": gas_readings.oxidising, 
+                "Nh3": gas_readings.nh3, 
                 "Pressure": pressure, 
                 "Humidity": humidity, 
                 "Light": lux
